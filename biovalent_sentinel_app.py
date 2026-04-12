@@ -1,452 +1,569 @@
-"""
-╔══════════════════════════════════════════════════════════════════════╗
-║   BIOVALENT SENTINEL v9.0  —  Streamlit Web Application             ║
-║   Decoding the Bonds of Life                                         ║
-║                                                                      ║
-║   KURULUM:                                                           ║
-║       pip install streamlit matplotlib numpy biopython               ║
-║       streamlit run biovalent_sentinel_app.py                        ║
-║                                                                      ║
-║   Google Colab:                                                      ║
-║       !pip install streamlit matplotlib numpy biopython pyngrok -q   ║
-║       !streamlit run biovalent_sentinel_app.py &                     ║
-║       from pyngrok import ngrok; print(ngrok.connect(8501))          ║
-╚══════════════════════════════════════════════════════════════════════╝
-"""
+# =============================================================================
+#  BIOVALENT SENTINEL v2.0
+#  Tarımsal Biyoteknoloji & Genetik Karar Destek Sistemi
+#  "Decoding the Bonds of Life"
+#
+#  KURULUM:
+#      pip install streamlit pandas numpy biopython plotly openpyxl
+#      streamlit run app.py
+#
+#  Google Colab:
+#      !pip install streamlit pandas numpy biopython plotly openpyxl pyngrok -q
+#      !streamlit run app.py &
+#      from pyngrok import ngrok; print(ngrok.connect(8501))
+# =============================================================================
 
-# ─────────────────────────────────────────────────────────────────────
-# §0  BAĞIMLILIKLAR
-# ─────────────────────────────────────────────────────────────────────
-import sys, re, math, itertools, traceback
-from copy import deepcopy
+# ─────────────────────────────────────────────────────────────────────────────
+# §0  IMPORTS
+# ─────────────────────────────────────────────────────────────────────────────
+import re
+import math
+import itertools
+import traceback
 from datetime import datetime
-from enum import Enum
-from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 
 import streamlit as st
+import pandas as pd
+import numpy as np
 
 try:
-    import matplotlib; matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    import matplotlib.patches as mpatches
-    import matplotlib.gridspec as gridspec
-    _MPL_OK = True
+    from Bio.Seq import Seq
+    _BIO_OK = True
 except ImportError:
-    _MPL_OK = False
+    _BIO_OK = False
 
 try:
-    import numpy as np
-    _NP_OK = True
+    import plotly.express as px
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    _PLT_OK = True
 except ImportError:
-    _NP_OK = False
+    _PLT_OK = False
 
-# ─────────────────────────────────────────────────────────────────────
-# §1  SAYFA KONFİGÜRASYONU & TEMA  (Streamlit'e özgü, import'tan hemen sonra)
-# ─────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# §1  SAYFA KONFİGÜRASYONU  (her zaman ilk Streamlit çağrısı)
+# ─────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Biovalent Sentinel v9.0",
+    page_title="Biovalent Sentinel v2.0",
     page_icon="🧬",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# ── CSS: Koyu Lacivert + Neon Yeşil/Mint teması ──────────────────────
-CUSTOM_CSS = """
+# ─────────────────────────────────────────────────────────────────────────────
+# §2  GLOBAL RENK PALETİ & CSS
+# ─────────────────────────────────────────────────────────────────────────────
+# Koyu Yeşil / Altın / Gri kurumsal palet
+PAL = {
+    "bg"       : "#0e1a0e",   # Ana arka plan
+    "panel"    : "#142014",   # Kart / panel arka planı
+    "border"   : "#1f3a1f",   # Kenar çizgileri
+    "green_hi" : "#4ade80",   # Neon yeşil vurgu
+    "green_mid": "#22c55e",   # Orta yeşil
+    "green_dim": "#166534",   # Koyu yeşil
+    "gold"     : "#fbbf24",   # Altın vurgu
+    "gold_dim" : "#92400e",   # Koyu altın
+    "grey_hi"  : "#d1fae5",   # Açık gri-yeşil metin
+    "grey_mid" : "#6b7280",   # Orta gri
+    "grey_dim" : "#374151",   # Koyu gri
+    "red"      : "#f87171",   # Risk / uyarı
+    "amber"    : "#fcd34d",   # Orta uyarı
+    "white"    : "#f0fdf4",   # Beyaz
+}
+
+# Plotly tema renkleri
+PLOTLY_COLORS = [
+    PAL["green_hi"], PAL["gold"], "#60a5fa", "#c084fc",
+    "#f97316", "#34d399", "#fb7185", "#a3e635",
+]
+
+CUSTOM_CSS = f"""
 <style>
-/* ── Temel arka plan ── */
-html, body, [data-testid="stAppViewContainer"] {
-    background-color: #0b1120;
-    color: #e2e8f0;
-    font-family: 'Inter', 'Segoe UI', sans-serif;
-}
-[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #0d1b2a 0%, #0f2040 100%);
-    border-right: 1px solid #1e3a5f;
-}
-/* ── Başlık ── */
-h1 { color: #00ffaa !important; letter-spacing: -0.5px; }
-h2 { color: #7de8c5 !important; }
-h3 { color: #a8edda !important; }
-/* ── Metrik kartları ── */
-[data-testid="metric-container"] {
-    background: linear-gradient(135deg, #0d2137 0%, #0a1628 100%);
-    border: 1px solid #1e4d7b;
-    border-radius: 12px;
-    padding: 16px !important;
-}
-[data-testid="metric-container"] label { color: #7de8c5 !important; font-size:0.8rem; }
-[data-testid="metric-container"] [data-testid="stMetricValue"] { color: #00ffaa !important; }
-/* ── Butonlar ── */
-.stButton>button {
-    background: linear-gradient(135deg, #00c87a 0%, #00a86b 100%);
-    color: #0b1120;
-    border: none;
-    border-radius: 8px;
-    font-weight: 700;
-    padding: 0.5rem 1.4rem;
-    font-size: 0.95rem;
-    letter-spacing: 0.3px;
-    transition: all 0.2s ease;
-}
-.stButton>button:hover {
-    background: linear-gradient(135deg, #00ffaa 0%, #00c87a 100%);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 20px rgba(0,200,122,0.35);
-}
-/* ── Metin alanları & inputlar ── */
-.stTextArea textarea, .stTextInput input, .stSelectbox select {
-    background-color: #0d2137 !important;
-    color: #e2e8f0 !important;
-    border: 1px solid #1e4d7b !important;
-    border-radius: 8px !important;
-}
-/* ── Multiselect ── */
-.stMultiSelect > div { background-color: #0d2137 !important; }
-/* ── Kartlar (info/success/warning/error) ── */
-.stAlert {
-    border-radius: 10px !important;
-    border-left-width: 4px !important;
-}
-/* ── Ayırıcı çizgi ── */
-hr { border-color: #1e3a5f !important; }
-/* ── Sidebar menü ögeleri ── */
-[data-testid="stSidebarNav"] { background: transparent; }
-/* ── Expander ── */
-.streamlit-expanderHeader {
-    background-color: #0d2137 !important;
-    color: #7de8c5 !important;
-    border-radius: 8px !important;
-}
-/* ── Dataframe / tablo ── */
-[data-testid="stDataFrame"] {
-    border: 1px solid #1e4d7b;
-    border-radius: 8px;
-}
-/* ── Sayfa içi kart ── */
-.bv-card {
-    background: linear-gradient(135deg, #0d2137 0%, #0a1a2e 100%);
-    border: 1px solid #1e4d7b;
-    border-radius: 14px;
-    padding: 1.4rem 1.6rem;
-    margin-bottom: 1rem;
-}
-.bv-badge-green  { background:#003d26; color:#00ffaa; padding:3px 10px;
-                   border-radius:20px; font-size:0.78rem; font-weight:600; }
-.bv-badge-yellow { background:#332700; color:#ffd166; padding:3px 10px;
-                   border-radius:20px; font-size:0.78rem; font-weight:600; }
-.bv-badge-red    { background:#3d0000; color:#ff6b6b; padding:3px 10px;
-                   border-radius:20px; font-size:0.78rem; font-weight:600; }
-/* ── Logo başlık alanı ── */
-.bv-hero {
-    background: linear-gradient(135deg, #0d2137 0%, #0a1628 50%, #001a0d 100%);
-    border: 1px solid #1e4d7b;
-    border-radius: 16px;
-    padding: 2rem 2.5rem;
-    margin-bottom: 1.5rem;
-    text-align: center;
-}
+  /* ── Root ── */
+  html, body, [data-testid="stAppViewContainer"] {{
+      background-color: {PAL["bg"]};
+      color: {PAL["grey_hi"]};
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+  }}
+  /* ── Sidebar ── */
+  [data-testid="stSidebar"] {{
+      background: linear-gradient(180deg, #0a1a0a 0%, #0f2210 100%);
+      border-right: 1px solid {PAL["border"]};
+  }}
+  /* ── Başlıklar ── */
+  h1 {{ color: {PAL["green_hi"]} !important; letter-spacing: -0.5px; }}
+  h2 {{ color: {PAL["gold"]} !important; }}
+  h3 {{ color: {PAL["green_mid"]} !important; }}
+  /* ── Metrik kartları ── */
+  [data-testid="metric-container"] {{
+      background: linear-gradient(135deg, {PAL["panel"]} 0%, {PAL["bg"]} 100%);
+      border: 1px solid {PAL["border"]};
+      border-radius: 10px;
+      padding: 14px !important;
+  }}
+  [data-testid="metric-container"] label {{
+      color: {PAL["gold"]} !important;
+      font-size: 0.78rem;
+  }}
+  [data-testid="metric-container"] [data-testid="stMetricValue"] {{
+      color: {PAL["green_hi"]} !important;
+      font-weight: 700;
+  }}
+  /* ── Butonlar ── */
+  .stButton > button {{
+      background: linear-gradient(135deg, {PAL["green_dim"]} 0%, #14532d 100%);
+      color: {PAL["green_hi"]};
+      border: 1px solid {PAL["green_mid"]};
+      border-radius: 8px;
+      font-weight: 700;
+      padding: 0.45rem 1.3rem;
+      transition: all 0.2s ease;
+  }}
+  .stButton > button:hover {{
+      background: linear-gradient(135deg, {PAL["green_mid"]} 0%, {PAL["green_dim"]} 100%);
+      color: {PAL["white"]};
+      transform: translateY(-1px);
+      box-shadow: 0 4px 18px rgba(74,222,128,0.30);
+  }}
+  /* ── Inputlar ── */
+  .stTextArea textarea, .stTextInput input {{
+      background-color: {PAL["panel"]} !important;
+      color: {PAL["grey_hi"]} !important;
+      border: 1px solid {PAL["border"]} !important;
+      border-radius: 8px !important;
+  }}
+  /* ── Selectbox / Multiselect ── */
+  .stSelectbox > div, .stMultiSelect > div {{
+      background-color: {PAL["panel"]} !important;
+  }}
+  /* ── Tab başlıkları ── */
+  [data-baseweb="tab-list"] {{
+      background-color: {PAL["panel"]} !important;
+      border-radius: 10px;
+      padding: 4px;
+  }}
+  [data-baseweb="tab"] {{
+      color: {PAL["grey_mid"]} !important;
+      font-weight: 600;
+  }}
+  [aria-selected="true"] {{
+      color: {PAL["green_hi"]} !important;
+      background-color: {PAL["green_dim"]} !important;
+      border-radius: 8px;
+  }}
+  /* ── Dataframe ── */
+  [data-testid="stDataFrame"] {{
+      border: 1px solid {PAL["border"]};
+      border-radius: 8px;
+  }}
+  /* ── Expander ── */
+  .streamlit-expanderHeader {{
+      background-color: {PAL["panel"]} !important;
+      color: {PAL["gold"]} !important;
+      border-radius: 8px !important;
+  }}
+  /* ── Alert (info/success/warning/error) ── */
+  .stAlert {{ border-radius: 8px !important; border-left-width: 4px !important; }}
+  /* ── Divider ── */
+  hr {{ border-color: {PAL["border"]} !important; }}
+  /* ── Özel kartlar ── */
+  .bv-card {{
+      background: linear-gradient(135deg, {PAL["panel"]} 0%, {PAL["bg"]} 100%);
+      border: 1px solid {PAL["border"]};
+      border-radius: 12px;
+      padding: 1.2rem 1.4rem;
+      margin-bottom: 0.9rem;
+  }}
+  .bv-hero {{
+      background: linear-gradient(135deg, {PAL["panel"]} 0%, #0a1f0a 50%, {PAL["bg"]} 100%);
+      border: 1px solid {PAL["border"]};
+      border-radius: 16px;
+      padding: 1.8rem 2.2rem;
+      margin-bottom: 1.2rem;
+      text-align: center;
+  }}
+  .badge-green  {{ background:{PAL["green_dim"]};color:{PAL["green_hi"]};
+                   padding:2px 9px;border-radius:20px;font-size:0.76rem;font-weight:700; }}
+  .badge-gold   {{ background:{PAL["gold_dim"]};color:{PAL["gold"]};
+                   padding:2px 9px;border-radius:20px;font-size:0.76rem;font-weight:700; }}
+  .badge-red    {{ background:#450a0a;color:{PAL["red"]};
+                   padding:2px 9px;border-radius:20px;font-size:0.76rem;font-weight:700; }}
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────────────────────────────
-# §2  GLOBAL SABİTLER
-# ─────────────────────────────────────────────────────────────────────
-VER    = "9.0.0"
+# ─────────────────────────────────────────────────────────────────────────────
+# §3  SABITLER
+# ─────────────────────────────────────────────────────────────────────────────
+VER    = "2.0.0"
 FIRMA  = "Biovalent"
 SLOGAN = "Decoding the Bonds of Life"
 GUVEN  = 0.95
 
-# Matplotlib koyu tema sabitleri
-BG    = "#0b1120"; PANEL = "#0d2137"; EDGE  = "#1e4d7b"
-GRN   = "#00c87a"; MINT  = "#00ffaa"; RED   = "#ff6b6b"
-YLW   = "#ffd166"; GREY  = "#4a6a8a"; WHT   = "#e2e8f0"
+# Demo DNA dizisi (NBS-LRR P-loop içerir)
+DEMO_DNA = (
+    "ATGGGCGTTGGCAAAACTACCATGCTTGCAGCTGATTTGCGTCAGAAGATGGCTGCAGAGCTGAAAGAT"
+    "CGCTTTGCGATGGTGGATGGCGTGGGCGAAGTGGACTCTTTTGGCGACTTCCTCAAAACACTCGCAGAG"
+    "GAGATCATTGGCGTCGTCAAAGATAGTAAACTCTATTTGTTGCTTCTTTTAAGTGGCAGGACTTGGCAT"
+    "GTTGGGCGGCGTACTTGGCATTTCAATGGGCGGACAAGAAGTTCCTCATACCGAGAGAGAGTGGGCGTT"
+    "GGCAAAACTACCGTATGGGCGGCAAGAAGTTCCTTGAGGGGGTGGCAAAACCATGGCTGGCAGACTTGC"
+    "TGGCAAGAAGTGGCAGAAGTGGGAGCAGCTACAGCAGCAGCAGCAGCAGCAGCAGCAGCAGCAGCAGCAG"
+)
 
-# ─────────────────────────────────────────────────────────────────────
-# §3  BIYOENFORMATIK MOTOR  (v9.0 motoru — terminal bağımlılıklarından arındırılmış)
-# ─────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# §4  DEMO VERİSETİ  (≥20 satır, biyolojik olarak gerçekçi)
+# ─────────────────────────────────────────────────────────────────────────────
 
-class Alel(str, Enum):
-    DOM_HOM = "dominant_homozigot"
-    HET     = "heterozigot"
-    REC_HOM = "resesif_homozigot"
+@st.cache_data
+def demo_veri() -> pd.DataFrame:
+    """
+    Domates ve biber ağırlıklı, 25 satırlık kapsamlı demo envanter.
+    Sütunlar:
+        hat_id, hat_adi, tur, meyve_rengi, verim_t_ha, raf_omru_gun,
+        hasat_gunu, brix, fusarium_I, tmv_Tm2a, nematod_Mi12, rin_gen,
+        pto_gen, fusarium_cM, tmv_cM, nematod_cM, rin_cM,
+        etiketler
+    """
+    rows = [
+        # ── DOMATES (Solanum lycopersicum) ──
+        dict(hat_id="BIO-TOM-001", hat_adi="Crimson Shield F6",  tur="Solanum lycopersicum",
+             meyve_rengi="Koyu Kırmızı",  verim_t_ha=18.5, raf_omru_gun=14, hasat_gunu=72,
+             brix=5.2,
+             fusarium_I=1,  tmv_Tm2a=1,  nematod_Mi12=0, rin_gen=0, pto_gen=1,
+             fusarium_cM=45.0, tmv_cM=22.0, nematod_cM=33.0, rin_cM=12.0,
+             etiketler="fusarium direnci,tmv direnci,virüs direnci,orta verim"),
+        dict(hat_id="BIO-TOM-002", hat_adi="GoldenYield HV-9",   tur="Solanum lycopersicum",
+             meyve_rengi="Parlak Sarı",   verim_t_ha=22.3, raf_omru_gun=11, hasat_gunu=68,
+             brix=4.8,
+             fusarium_I=0,  tmv_Tm2a=1,  nematod_Mi12=0, rin_gen=0, pto_gen=0,
+             fusarium_cM=45.0, tmv_cM=22.0, nematod_cM=33.0, rin_cM=12.0,
+             etiketler="sarı meyve,yüksek verim,ticari hat"),
+        dict(hat_id="BIO-TOM-003", hat_adi="LongLife Premium",   tur="Solanum lycopersicum",
+             meyve_rengi="Kırmızı",       verim_t_ha=16.8, raf_omru_gun=24, hasat_gunu=78,
+             brix=5.8,
+             fusarium_I=0,  tmv_Tm2a=0,  nematod_Mi12=1, rin_gen=1, pto_gen=0,
+             fusarium_cM=45.0, tmv_cM=22.0, nematod_cM=33.0, rin_cM=12.0,
+             etiketler="uzun raf ömrü,nematod direnci,ihracat"),
+        dict(hat_id="BIO-TOM-004", hat_adi="SunGold Cherry",     tur="Solanum lycopersicum",
+             meyve_rengi="Turuncu-Sarı",  verim_t_ha=21.0, raf_omru_gun=10, hasat_gunu=62,
+             brix=8.2,
+             fusarium_I=0,  tmv_Tm2a=0,  nematod_Mi12=0, rin_gen=0, pto_gen=0,
+             fusarium_cM=45.0, tmv_cM=22.0, nematod_cM=33.0, rin_cM=12.0,
+             etiketler="sarı meyve,cherry,yüksek brix,gourmet"),
+        dict(hat_id="BIO-TOM-005", hat_adi="Titan Robust F4",    tur="Solanum lycopersicum",
+             meyve_rengi="Koyu Kırmızı",  verim_t_ha=17.2, raf_omru_gun=16, hasat_gunu=80,
+             brix=4.5,
+             fusarium_I=1,  tmv_Tm2a=0,  nematod_Mi12=1, rin_gen=0, pto_gen=0,
+             fusarium_cM=45.0, tmv_cM=22.0, nematod_cM=33.0, rin_cM=12.0,
+             etiketler="fusarium direnci,nematod direnci,ağır toprak"),
+        dict(hat_id="BIO-TOM-006", hat_adi="Sunrise Export",     tur="Solanum lycopersicum",
+             meyve_rengi="Sarı-Turuncu",  verim_t_ha=19.6, raf_omru_gun=20, hasat_gunu=74,
+             brix=5.0,
+             fusarium_I=0,  tmv_Tm2a=1,  nematod_Mi12=0, rin_gen=1, pto_gen=0,
+             fusarium_cM=45.0, tmv_cM=22.0, nematod_cM=33.0, rin_cM=12.0,
+             etiketler="sarı meyve,uzun raf ömrü,tmv direnci,ihracat"),
+        dict(hat_id="BIO-TOM-007", hat_adi="MiniSweet Pink",     tur="Solanum lycopersicum",
+             meyve_rengi="Pembe",         verim_t_ha=14.4, raf_omru_gun=9,  hasat_gunu=60,
+             brix=9.1,
+             fusarium_I=0,  tmv_Tm2a=0,  nematod_Mi12=0, rin_gen=0, pto_gen=0,
+             fusarium_cM=45.0, tmv_cM=22.0, nematod_cM=33.0, rin_cM=12.0,
+             etiketler="pembe,cherry,yüksek brix,gurme"),
+        dict(hat_id="BIO-TOM-008", hat_adi="IronShield Plus",    tur="Solanum lycopersicum",
+             meyve_rengi="Kırmızı",       verim_t_ha=16.0, raf_omru_gun=18, hasat_gunu=76,
+             brix=4.7,
+             fusarium_I=1,  tmv_Tm2a=1,  nematod_Mi12=1, rin_gen=0, pto_gen=1,
+             fusarium_cM=45.0, tmv_cM=22.0, nematod_cM=33.0, rin_cM=12.0,
+             etiketler="fusarium direnci,tmv direnci,nematod direnci,çok dirençli"),
+        dict(hat_id="BIO-TOM-009", hat_adi="Quantum Beefsteak",  tur="Solanum lycopersicum",
+             meyve_rengi="Kırmızı",       verim_t_ha=20.1, raf_omru_gun=12, hasat_gunu=84,
+             brix=4.2,
+             fusarium_I=1,  tmv_Tm2a=0,  nematod_Mi12=0, rin_gen=0, pto_gen=0,
+             fusarium_cM=45.0, tmv_cM=22.0, nematod_cM=33.0, rin_cM=12.0,
+             etiketler="yüksek verim,büyük meyve,endüstriyel"),
+        dict(hat_id="BIO-TOM-010", hat_adi="Arctic White F3",    tur="Solanum lycopersicum",
+             meyve_rengi="Beyaz",         verim_t_ha=12.5, raf_omru_gun=13, hasat_gunu=70,
+             brix=6.5,
+             fusarium_I=0,  tmv_Tm2a=0,  nematod_Mi12=0, rin_gen=1, pto_gen=0,
+             fusarium_cM=45.0, tmv_cM=22.0, nematod_cM=33.0, rin_cM=12.0,
+             etiketler="beyaz meyve,uzun raf ömrü,özel pazar"),
+        dict(hat_id="BIO-TOM-011", hat_adi="BioShield Triple",   tur="Solanum lycopersicum",
+             meyve_rengi="Kırmızı",       verim_t_ha=15.3, raf_omru_gun=15, hasat_gunu=73,
+             brix=5.1,
+             fusarium_I=1,  tmv_Tm2a=1,  nematod_Mi12=1, rin_gen=1, pto_gen=1,
+             fusarium_cM=45.0, tmv_cM=22.0, nematod_cM=33.0, rin_cM=12.0,
+             etiketler="tam direnç paketi,uzun raf ömrü,organik"),
+        dict(hat_id="BIO-TOM-012", hat_adi="Volcano Dark",       tur="Solanum lycopersicum",
+             meyve_rengi="Siyah-Mor",     verim_t_ha=11.8, raf_omru_gun=11, hasat_gunu=78,
+             brix=7.3,
+             fusarium_I=0,  tmv_Tm2a=0,  nematod_Mi12=0, rin_gen=0, pto_gen=0,
+             fusarium_cM=45.0, tmv_cM=22.0, nematod_cM=33.0, rin_cM=12.0,
+             etiketler="siyah meyve,antosiyanin,özel pazar,gurme"),
+        # ── BİBER (Capsicum annuum) ──
+        dict(hat_id="BIO-CAP-001", hat_adi="RedBlaze L4 F5",     tur="Capsicum annuum",
+             meyve_rengi="Parlak Kırmızı",verim_t_ha=15.5, raf_omru_gun=18, hasat_gunu=85,
+             brix=6.1,
+             fusarium_I=0,  tmv_Tm2a=1,  nematod_Mi12=0, rin_gen=0, pto_gen=0,
+             fusarium_cM=18.0, tmv_cM=18.0, nematod_cM=28.0, rin_cM=9.0,
+             etiketler="kırmızı meyve,tmv direnci,pvy direnci,virüs direnci"),
+        dict(hat_id="BIO-CAP-002", hat_adi="YellowBell Export",  tur="Capsicum annuum",
+             meyve_rengi="Sarı",          verim_t_ha=13.8, raf_omru_gun=14, hasat_gunu=90,
+             brix=5.5,
+             fusarium_I=0,  tmv_Tm2a=0,  nematod_Mi12=0, rin_gen=0, pto_gen=0,
+             fusarium_cM=18.0, tmv_cM=18.0, nematod_cM=28.0, rin_cM=9.0,
+             etiketler="sarı meyve,dolmalık biber,ihracat"),
+        dict(hat_id="BIO-CAP-003", hat_adi="Spicy Supreme",      tur="Capsicum annuum",
+             meyve_rengi="Kırmızı-Turuncu",verim_t_ha=16.2, raf_omru_gun=12, hasat_gunu=78,
+             brix=7.2,
+             fusarium_I=0,  tmv_Tm2a=1,  nematod_Mi12=0, rin_gen=0, pto_gen=0,
+             fusarium_cM=18.0, tmv_cM=18.0, nematod_cM=28.0, rin_cM=9.0,
+             etiketler="acı biber,yüksek brix,yüksek verim,gourmet"),
+        dict(hat_id="BIO-CAP-004", hat_adi="Purple Beauty",      tur="Capsicum annuum",
+             meyve_rengi="Mor",           verim_t_ha=12.0, raf_omru_gun=13, hasat_gunu=88,
+             brix=6.8,
+             fusarium_I=0,  tmv_Tm2a=0,  nematod_Mi12=0, rin_gen=0, pto_gen=0,
+             fusarium_cM=18.0, tmv_cM=18.0, nematod_cM=28.0, rin_cM=9.0,
+             etiketler="mor meyve,özel pazar,dolmalık"),
+        dict(hat_id="BIO-CAP-005", hat_adi="FireFighter TMV",    tur="Capsicum annuum",
+             meyve_rengi="Turuncu",       verim_t_ha=14.7, raf_omru_gun=16, hasat_gunu=82,
+             brix=5.9,
+             fusarium_I=0,  tmv_Tm2a=1,  nematod_Mi12=1, rin_gen=0, pto_gen=0,
+             fusarium_cM=18.0, tmv_cM=18.0, nematod_cM=28.0, rin_cM=9.0,
+             etiketler="tmv direnci,nematod direnci,virüs direnci,ihracat"),
+        dict(hat_id="BIO-CAP-006", hat_adi="SuperSweet Block",   tur="Capsicum annuum",
+             meyve_rengi="Kırmızı",       verim_t_ha=17.0, raf_omru_gun=15, hasat_gunu=80,
+             brix=8.0,
+             fusarium_I=0,  tmv_Tm2a=0,  nematod_Mi12=0, rin_gen=0, pto_gen=0,
+             fusarium_cM=18.0, tmv_cM=18.0, nematod_cM=28.0, rin_cM=9.0,
+             etiketler="yüksek brix,yüksek verim,sanayi"),
+        # ── KAVUN (Cucumis melo) ──
+        dict(hat_id="BIO-MEL-001", hat_adi="Honeygold F1",       tur="Cucumis melo",
+             meyve_rengi="Sarı-Altın",    verim_t_ha=24.0, raf_omru_gun=16, hasat_gunu=82,
+             brix=14.5,
+             fusarium_I=1,  tmv_Tm2a=0,  nematod_Mi12=0, rin_gen=0, pto_gen=0,
+             fusarium_cM=30.0, tmv_cM=15.0, nematod_cM=42.0, rin_cM=20.0,
+             etiketler="kavun,yüksek brix,fusarium direnci,ihracat"),
+        dict(hat_id="BIO-MEL-002", hat_adi="Cantaloup Elite",    tur="Cucumis melo",
+             meyve_rengi="Turuncu",       verim_t_ha=21.5, raf_omru_gun=14, hasat_gunu=78,
+             brix=13.2,
+             fusarium_I=0,  tmv_Tm2a=1,  nematod_Mi12=0, rin_gen=0, pto_gen=0,
+             fusarium_cM=30.0, tmv_cM=15.0, nematod_cM=42.0, rin_cM=20.0,
+             etiketler="kavun,kantalup,tmv direnci,özel pazar"),
+        dict(hat_id="BIO-MEL-003", hat_adi="EarlyDawn PM",       tur="Cucumis melo",
+             meyve_rengi="Beyaz-Sarı",    verim_t_ha=19.8, raf_omru_gun=18, hasat_gunu=72,
+             brix=12.8,
+             fusarium_I=0,  tmv_Tm2a=0,  nematod_Mi12=1, rin_gen=1, pto_gen=0,
+             fusarium_cM=30.0, tmv_cM=15.0, nematod_cM=42.0, rin_cM=20.0,
+             etiketler="kavun,erken olgunlaşma,nematod direnci,uzun raf ömrü"),
+        # ── KARPUZ (Citrullus lanatus) ──
+        dict(hat_id="BIO-WAT-001", hat_adi="Crimson Giant F2",   tur="Citrullus lanatus",
+             meyve_rengi="Kırmızı",       verim_t_ha=35.0, raf_omru_gun=21, hasat_gunu=88,
+             brix=11.5,
+             fusarium_I=1,  tmv_Tm2a=0,  nematod_Mi12=0, rin_gen=0, pto_gen=0,
+             fusarium_cM=38.0, tmv_cM=25.0, nematod_cM=50.0, rin_cM=18.0,
+             etiketler="karpuz,yüksek verim,fusarium direnci,endüstriyel"),
+        dict(hat_id="BIO-WAT-002", hat_adi="Seedless Wonder",    tur="Citrullus lanatus",
+             meyve_rengi="Kırmızı",       verim_t_ha=28.5, raf_omru_gun=19, hasat_gunu=84,
+             brix=12.2,
+             fusarium_I=0,  tmv_Tm2a=0,  nematod_Mi12=0, rin_gen=0, pto_gen=0,
+             fusarium_cM=38.0, tmv_cM=25.0, nematod_cM=50.0, rin_cM=18.0,
+             etiketler="karpuz,tohumsuz,özel pazar,ihracat"),
+        dict(hat_id="BIO-WAT-003", hat_adi="YellowFlesh Mini",   tur="Citrullus lanatus",
+             meyve_rengi="Sarı Et",       verim_t_ha=22.0, raf_omru_gun=17, hasat_gunu=80,
+             brix=13.0,
+             fusarium_I=0,  tmv_Tm2a=0,  nematod_Mi12=1, rin_gen=0, pto_gen=0,
+             fusarium_cM=38.0, tmv_cM=25.0, nematod_cM=50.0, rin_cM=18.0,
+             etiketler="karpuz,sarı et,nematod direnci,gourmet"),
+    ]
+    return pd.DataFrame(rows)
 
-ALEL_ETIKET = {
-    Alel.DOM_HOM: "Dominant Homozigot (AA)",
-    Alel.HET    : "Heterozigot (Aa)",
-    Alel.REC_HOM: "Resesif Homozigot (aa)",
+# ─────────────────────────────────────────────────────────────────────────────
+# §5  GENETİK MOTOR (hesap sınıfları — Streamlit bağımsız)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── §5.1  Matchmaker ─────────────────────────────────────────────────────────
+
+GEN_SUTUNLARI = ["fusarium_I", "tmv_Tm2a", "nematod_Mi12", "rin_gen", "pto_gen"]
+GEN_ETIKETLER = {
+    "fusarium_I"  : "Fusarium Direnci (I)",
+    "tmv_Tm2a"    : "TMV Direnci (Tm-2a)",
+    "nematod_Mi12": "Nematod Direnci (Mi-1.2)",
+    "rin_gen"     : "Uzun Raf Ömrü (rin)",
+    "pto_gen"     : "Pseudomonas Direnci (Pto)",
+    "yüksek_verim": "Yüksek Verim (≥18 t/ha)",
+    "uzun_raf"    : "Uzun Raf Ömrü (≥18 gün)",
+    "yüksek_brix" : "Yüksek Brix (≥7°)",
 }
 
 
-@dataclass
-class GeneticMarker:
-    gen    : str
-    lokus  : str
-    alel   : Alel
-    cM     : float = 0.0
-    kaynak : str   = ""
-
-    def __post_init__(self):
-        if not isinstance(self.alel, Alel):
-            self.alel = Alel(self.alel)
-
-    @property
-    def aleller(self) -> Tuple[str, str]:
-        B, k = self.gen[0].upper(), self.gen[0].lower()
-        return {Alel.DOM_HOM:(B,B), Alel.HET:(B,k), Alel.REC_HOM:(k,k)}[self.alel]
-
-    def genotip(self) -> str:
-        return "".join(self.aleller)
-
-    def is_dominant(self) -> bool:
-        return self.alel in (Alel.DOM_HOM, Alel.HET)
+def mendel_f2_p(anne_val: int, baba_val: int) -> float:
+    """
+    İki ebeveynin tek-gen değerinden F2 dominant fenotip olasılığını döndürür.
+    0 = resesif homozigot (aa), 1 = dominant (AA veya Aa varsayımı)
+    """
+    if anne_val == 1 and baba_val == 1:
+        return 1.00   # AA x AA → tümü
+    elif anne_val == 1 or baba_val == 1:
+        return 0.75   # Aa x aa → 3:1
+    else:
+        return 0.00   # aa x aa → hiç
 
 
-@dataclass
-class PhysicalTraits:
-    meyve_rengi     : str       = "Tanımsız"
-    meyve_agirlik_g : float     = 0.0
-    verim_skoru     : float     = 0.0
-    hasat_gunu      : int       = 0
-    brix            : float     = 0.0
-    raf_omru_gun    : int       = 0
-    dayaniklilik    : List[str] = field(default_factory=list)
-    notlar          : str       = ""
+def matchmaker_skoru(
+    anne: pd.Series,
+    baba: pd.Series,
+    hedef_genler: List[str],
+    hedef_fenotip: List[str],
+) -> Dict:
+    """
+    Anne × Baba çifti için 100 üzerinden bileşik uyum skoru hesaplar.
+    """
+    # 1. Gen uyum skoru (max 50 puan)
+    gen_p_toplam = 0.0
+    gen_detay    = {}
+    for g in hedef_genler:
+        if g not in anne.index:
+            continue
+        p = mendel_f2_p(int(anne[g]), int(baba[g]))
+        gen_p_toplam += p
+        gen_detay[GEN_ETIKETLER.get(g, g)] = round(p * 100, 1)
+    gen_skoru = (gen_p_toplam / max(len(hedef_genler), 1)) * 50
 
+    # 2. Fenotip uyum skoru (max 30 puan)
+    feno_skoru = 0.0
+    if "yüksek_verim" in hedef_fenotip:
+        avg_v = (anne["verim_t_ha"] + baba["verim_t_ha"]) / 2
+        feno_skoru += min(avg_v / 25, 1.0) * 15
+    if "uzun_raf" in hedef_fenotip:
+        avg_r = (anne["raf_omru_gun"] + baba["raf_omru_gun"]) / 2
+        feno_skoru += min(avg_r / 30, 1.0) * 10
+    if "yüksek_brix" in hedef_fenotip:
+        avg_b = (anne["brix"] + baba["brix"]) / 2
+        feno_skoru += min(avg_b / 10, 1.0) * 5
+    if not hedef_fenotip:
+        feno_skoru = 15   # Fenotip hedefi yoksa nötr
 
-class BreederLine:
-    def __init__(self, line_id, adi, tur, dna_dizisi=None,
-                 fiziksel=None, markorler=None, etiketler=None):
-        self.line_id   = line_id.strip().upper()
-        self.adi       = adi.strip()
-        self.tur       = tur.strip()
-        self.dna_dizisi= self._norm_dna(dna_dizisi)
-        self.fiziksel  = fiziksel  or PhysicalTraits()
-        self.markorler = markorler or []
-        self.etiketler = [e.lower().strip() for e in (etiketler or [])]
+    # 3. Tür uyumu (max 20 puan)
+    tur_skoru = 20.0 if anne["tur"] == baba["tur"] else 0.0
 
-    @staticmethod
-    def _norm_dna(s):
-        if not s: return None
-        lines = s.strip().splitlines()
-        clean = "".join(l.strip() for l in lines if not l.startswith(">"))
-        return "".join(c for c in clean.upper() if c in "ACGTUNRYSWKMBDHV-") or None
-
-    def markor(self, gen):
-        for m in self.markorler:
-            if m.gen.upper() == gen.upper(): return m
-        return None
-
-    def ozet(self):
-        return {
-            "Line ID": self.line_id, "Ad": self.adi, "Tür": self.tur,
-            "DNA (bp)": len(self.dna_dizisi) if self.dna_dizisi else 0,
-            "Markör #": len(self.markorler),
-            "Meyve Rengi": self.fiziksel.meyve_rengi,
-            "Verim (1-10)": self.fiziksel.verim_skoru,
-            "Hasat (gün)": self.fiziksel.hasat_gunu,
-            "Raf (gün)": self.fiziksel.raf_omru_gun,
-        }
-
-    def __repr__(self):
-        return f"<BreederLine {self.line_id}>"
-
-
-class Inventory:
-    def __init__(self):
-        self._db: Dict[str, BreederLine] = {}
-
-    def ekle(self, hat):
-        self._db[hat.line_id] = hat
-        return self
-
-    def getir(self, lid):
-        return self._db.get(lid.strip().upper())
-
-    def hepsi(self):
-        return list(self._db.values())
-
-    def listele(self):
-        return [h.ozet() for h in self._db.values()]
-
-    def ids(self):
-        return list(self._db.keys())
-
-    def __len__(self):
-        return len(self._db)
-
-
-# ── M1: Matchmaker ────────────────────────────────────────────────────
-
-@dataclass
-class MatchSonucu:
-    ana: BreederLine; baba: BreederLine
-    puan: float; hedef_p_f1: float; hedef_p_f2: float
-    karsilanan: List[str]; eksik: List[str]; yorum: str
-
-
-class Matchmaker:
-    @staticmethod
-    def _etiket_eslesme(ana, baba, hedefler):
-        havuz = set(ana.etiketler + baba.etiketler)
-        k, e = [], []
-        for h in hedefler:
-            (k if any(h in x or x in h for x in havuz) else e).append(h)
-        return len(k) / max(len(hedefler), 1) * 100, k, e
-
-    @staticmethod
-    def _mendel_f2_p(ana, baba, genler):
-        p = 1.0
-        for g in genler:
-            ma, mb = ana.markor(g), baba.markor(g)
-            aa = ma.aleller if ma else (g[0].lower(), g[0].lower())
-            ab = mb.aleller if mb else (g[0].lower(), g[0].lower())
-            f1a = sorted([aa[0], ab[0]], key=lambda x: (x.islower(), x))
-            a1, a2 = f1a[0], f1a[1] if len(f1a) > 1 else f1a[0]
-            if a1.isupper() and a2.isupper(): p_g = 1.00
-            elif a1.isupper() and a2.islower(): p_g = 0.75
-            else: p_g = 0.00
-            p *= p_g
-        return round(p, 6)
-
-    @staticmethod
-    def _fenotip_puani(ana, baba):
-        v = (ana.fiziksel.verim_skoru + baba.fiziksel.verim_skoru) / 2
-        r = (ana.fiziksel.raf_omru_gun + baba.fiziksel.raf_omru_gun) / 2
-        return round((min(v/10,1)*0.6 + min(r/30,1)*0.4) * 20, 2)
-
-    def en_iyi(self, inv, hedefler, hedef_genler=None, n=3):
-        hatlar = inv.hepsi(); genler = hedef_genler or []
-        if len(hatlar) < 2: return []
-        sonuclar = []
-        for ana, baba in itertools.permutations(hatlar, 2):
-            if ana.tur != baba.tur: continue
-            ep, k, e = self._etiket_eslesme(ana, baba, hedefler)
-            fp       = self._fenotip_puani(ana, baba)
-            f2_p     = self._mendel_f2_p(ana, baba, genler) if genler else 0.5
-            f1_p     = 1.0 if f2_p >= 0.75 else 0.75 if f2_p > 0 else 0.0
-            mp = sum(15 if m.is_dominant() else 0 for m in ana.markorler)
-            puan = min(ep*0.50 + mp*0.30 + fp*0.20, 100)
-            yorum = ("✅ Tüm hedefler karşılanabilir." if not e
-                     else f"⚠️ {len(e)} hedef eksik." if len(k)>=len(hedefler)*0.7
-                     else f"❌ {len(e)} kritik hedef karşılanamıyor.")
-            sonuclar.append(MatchSonucu(ana, baba, round(puan,2), f1_p, f2_p, k, e, yorum))
-        sonuclar.sort(key=lambda x: x.puan, reverse=True)
-        seen, uniq = set(), []
-        for s in sonuclar:
-            key = frozenset([s.ana.line_id, s.baba.line_id])
-            if key not in seen:
-                seen.add(key); uniq.append(s)
-        return uniq[:n]
-
-
-# ── M2: Linkage Drag ──────────────────────────────────────────────────
-
-@dataclass
-class LinkageSonucu:
-    gen_hedef: str; gen_surukle: str; cm_mesafe: float
-    suruklenme_r: float; rekomb_p: float; gerekli_bitki: int
-    uyari_seviye: str; aciklama: str
-
-
-class LinkageDragEngine:
-    _MAP: Dict[str, Dict[str, float]] = {
-        "I"    : {"Mi-1.2": 72.0, "Pto": 45.0},
-        "Tm-2a": {"Cf-9": 12.0},
-        "Cf-9" : {"Tm-2a": 12.0, "Cf-4": 8.0},
-        "Cf-4" : {"Cf-9": 8.0},
-        "rin"  : {"nor": 6.0},
-        "nor"  : {"rin": 6.0},
-        "y"    : {"B": 25.0},
+    toplam = min(gen_skoru + feno_skoru + tur_skoru, 100.0)
+    return {
+        "anne_id"       : anne["hat_id"],
+        "anne_adi"      : anne["hat_adi"],
+        "baba_id"       : baba["hat_id"],
+        "baba_adi"      : baba["hat_adi"],
+        "tur"           : anne["tur"],
+        "skor"          : round(toplam, 1),
+        "gen_skoru"     : round(gen_skoru, 1),
+        "feno_skoru"    : round(feno_skoru, 1),
+        "tur_skoru"     : round(tur_skoru, 1),
+        "gen_detay"     : gen_detay,
     }
 
-    @staticmethod
-    def haldane(cm): return 0.5 * (1 - math.exp(-2*cm/100))
 
-    @staticmethod
-    def min_bitki(r, guven=GUVEN):
-        if r<=0: return 999_999
-        if r>=1: return 1
-        return math.ceil(math.log(1-guven)/math.log(1-r))
-
-    def analiz_et(self, genler, ek_map=None):
-        harita = deepcopy(self._MAP)
-        if ek_map:
-            for g, km in ek_map.items():
-                harita.setdefault(g, {}).update(km)
-        sonuclar = []
-        for gen in genler:
-            for mk, komsular in harita.items():
-                if mk.upper() != gen.upper(): continue
-                for kg, cm in komsular.items():
-                    r = self.haldane(cm)
-                    n = self.min_bitki(r)
-                    if cm < 5:
-                        sev = "YÜKSEK"
-                        aciklama = f"Kritik bağlantı! {gen} ↔ {kg}: {cm:.1f} cM. {n:,} rekombinan bitki gerekli."
-                    elif cm < 20:
-                        sev = "ORTA"
-                        aciklama = f"Orta risk. {gen} ↔ {kg}: {cm:.1f} cM. {n:,} bitki ile ayrıştırılabilir."
-                    else:
-                        sev = "DÜŞÜK"
-                        aciklama = f"Düşük risk. {gen} ↔ {kg}: {cm:.1f} cM. {n:,} bitki yeterli."
-                    sonuclar.append(LinkageSonucu(gen, kg, cm, round(1-r,4), round(r,4), n, sev, aciklama))
-        return sorted(sonuclar, key=lambda x: x.cm_mesafe)
+def en_iyi_eslesme(
+    df: pd.DataFrame,
+    hedef_genler: List[str],
+    hedef_fenotip: List[str],
+    tür_filtre: str = "Tümü",
+    top_n: int = 10,
+) -> pd.DataFrame:
+    """Tüm (anne, baba) permütasyonlarını değerlendirip en iyi N'i döndürür."""
+    hatlar = df if tür_filtre == "Tümü" else df[df["tur"] == tür_filtre]
+    if len(hatlar) < 2:
+        return pd.DataFrame()
+    sonuclar = []
+    for i, j in itertools.permutations(range(len(hatlar)), 2):
+        anne = hatlar.iloc[i]
+        baba = hatlar.iloc[j]
+        if anne["hat_id"] == baba["hat_id"]:
+            continue
+        s = matchmaker_skoru(anne, baba, hedef_genler, hedef_fenotip)
+        sonuclar.append(s)
+    if not sonuclar:
+        return pd.DataFrame()
+    res = pd.DataFrame(sonuclar).drop_duplicates(
+        subset=["anne_id", "baba_id"]
+    ).sort_values("skor", ascending=False).head(top_n).reset_index(drop=True)
+    res.index += 1
+    return res
 
 
-# ── M3: Genetic Detective ──────────────────────────────────────────────
+# ── §5.2  Risk Engine ────────────────────────────────────────────────────────
 
-@dataclass
-class EbeveynTahmini:
-    hat1: BreederLine; hat2: BreederLine
-    kinship: float; benzerlik_pct: float; toplam: float; aciklama: str
-
-
-class GeneticDetective:
-    @staticmethod
-    def _kmer(a, b, k=8):
-        if not a or not b: return 0.0
-        def km(s): return set(s[i:i+k] for i in range(len(s)-k+1))
-        ka, kb = km(a), km(b)
-        if not ka or not kb: return 0.0
-        return len(ka & kb) / len(ka | kb)
-
-    @staticmethod
-    def _kinship(h1, h2, hibrit):
-        if not hibrit.markorler: return 0.5
-        ac = 0
-        for mh in hibrit.markorler:
-            ma, mb = h1.markor(mh.gen), h2.markor(mh.gen)
-            ah = set(mh.aleller)
-            aa = set(ma.aleller) if ma else set()
-            ab = set(mb.aleller) if mb else set()
-            if ah & (aa | ab): ac += 1
-        return ac / len(hibrit.markorler)
-
-    def tanimlama_yap(self, inv, hibrit, n=3):
-        hatlar = inv.hepsi()
-        if len(hatlar) < 2: return []
-        adaylar = []
-        for h1, h2 in itertools.combinations(hatlar, 2):
-            kin = self._kinship(h1, h2, hibrit)
-            dna_sim = 0.5
-            if hibrit.dna_dizisi:
-                sims = [self._kmer(hibrit.dna_dizisi, h.dna_dizisi)
-                        for h in (h1,h2) if h.dna_dizisi]
-                dna_sim = sum(sims)/len(sims) if sims else 0.5
-            toplam = round(kin*0.6 + dna_sim*0.4, 4)
-            aciklama = (f"Kinship: %{kin*100:.1f}  |  "
-                        f"DNA Benzerlik: %{dna_sim*100:.1f}  |  "
-                        f"Toplam Güven: %{toplam*100:.1f}")
-            adaylar.append(EbeveynTahmini(h1, h2, kin, dna_sim*100, toplam, aciklama))
-        adaylar.sort(key=lambda x: x.toplam, reverse=True)
-        return adaylar[:n]
+def haldane_r(cm: float) -> float:
+    """Haldane harita fonksiyonu: r = 0.5*(1 - e^(-2d/100))"""
+    return 0.5 * (1 - math.exp(-2 * cm / 100))
 
 
-# ── M4: Proteomik Yorumlayıcı ─────────────────────────────────────────
+def linkage_drag_analiz(cm_a: float, cm_b: float) -> Dict:
+    """
+    İki genin cM pozisyonundan Linkage Drag riskini hesaplar.
+    cm_a, cm_b: Aynı referans noktasına göre cM konumları
+    """
+    mesafe = abs(cm_a - cm_b)
+    r      = haldane_r(mesafe)
+    surukleme_riski = 1 - r   # Birlikte kalıtılma olasılığı
 
-_KODON: Dict[str, str] = {
+    if mesafe < 5:
+        seviye, aciklama = "KRİTİK", "Genler neredeyse her zaman birlikte kalıtılır."
+    elif mesafe < 15:
+        seviye, aciklama = "YÜKSEK", "Linkage drag yüksek risk taşıyor; geniş populasyon gerekli."
+    elif mesafe < 30:
+        seviye, aciklama = "ORTA", "Makul ayrışma olasılığı; MAS ile yönetilebilir."
+    else:
+        seviye, aciklama = "DÜŞÜK", "Genler büyük ölçüde bağımsız ayrışır."
+
+    # Rekombinan bitki sayısı (%95 güven)
+    if r > 0:
+        gerekli_bitki = math.ceil(math.log(1 - GUVEN) / math.log(1 - r))
+    else:
+        gerekli_bitki = 999_999
+
+    return {
+        "mesafe_cM"      : round(mesafe, 2),
+        "rekomb_p"       : round(r, 4),
+        "surukleme_riski": round(surukleme_riski * 100, 1),
+        "seviye"         : seviye,
+        "aciklama"       : aciklama,
+        "gerekli_bitki"  : gerekli_bitki,
+    }
+
+
+def f_nesil_sim(anne_val: int, baba_val: int, nesil: int = 4) -> pd.DataFrame:
+    """
+    F1 → F(nesil) arasında dominant fenotip sabitlenme (homozigot) olasılığını döndürür.
+
+    Formül: Her nesilde heterozigot oran yarıya iner (selfing varsayımı).
+    p_dominant(n) = 1 - (1/2)^(n-1) * p_het_F1 * (3/4)
+    (Basitleştirilmiş yaklaşım — bağımsız ayrışma varsayımı)
+    """
+    rows = []
+    for n in range(1, nesil + 1):
+        if anne_val == 1 and baba_val == 1:
+            # Her iki ebeveyn dominant → F1 ve ötesi sabitlenir
+            p_dom  = 1.0
+            p_homo = 1.0
+        elif anne_val == 1 or baba_val == 1:
+            # Heterozigot F1
+            p_het_n = (0.5) ** (n - 1)   # F1=0.50, F2=0.25, F3=0.125...
+            p_dom   = 1 - p_het_n * 0.25 if n > 1 else 0.75
+            p_homo  = 1 - p_het_n
+        else:
+            # Her iki resesif → hedef fenotip hiç görülmez
+            p_dom  = 0.0
+            p_homo = 0.0
+        rows.append({
+            "Nesil"                 : f"F{n}",
+            "Dominant Fenotip (%)"  : round(p_dom * 100, 2),
+            "Homozigot Oran (%)"    : round(p_homo * 100, 2),
+        })
+    return pd.DataFrame(rows)
+
+
+# ── §5.3  Proteomik Motor ────────────────────────────────────────────────────
+
+KODON_TABLOSU: Dict[str, str] = {
     'TTT':'F','TTC':'F','TTA':'L','TTG':'L','CTT':'L','CTC':'L','CTA':'L','CTG':'L',
     'ATT':'I','ATC':'I','ATA':'I','ATG':'M','GTT':'V','GTC':'V','GTA':'V','GTG':'V',
     'TCT':'S','TCC':'S','TCA':'S','TCG':'S','CCT':'P','CCC':'P','CCA':'P','CCG':'P',
@@ -456,923 +573,1236 @@ _KODON: Dict[str, str] = {
     'TGT':'C','TGC':'C','TGA':'*','TGG':'W','CGT':'R','CGC':'R','CGA':'R','CGG':'R',
     'AGT':'S','AGC':'S','AGA':'R','AGG':'R','GGT':'G','GGC':'G','GGA':'G','GGG':'G',
 }
-_MOTIFLER: List[Dict] = [
-    {"isim":"NBS (P-loop)","motif":"GVGKTT","kategori":"NBS-LRR Direnç Reseptörü",
-     "islev":"Nükleotid bağlanma; NBS-LRR direnç proteinlerinin çekirdeği.",
-     "tarla":"Patojen direnci — hastalık belirtisi azalır veya görülmez."},
-    {"isim":"LRR Tekrar","motif":"LXXLXLXX","kategori":"NBS-LRR Direnç Reseptörü",
-     "islev":"Lösin tekrarlı bölge; protein-protein etkileşimi.",
-     "tarla":"Geniş ırk spektrumlu hastalık direnci potansiyeli."},
-    {"isim":"Kinaz DFG","motif":"DFG","kategori":"Serin/Treonin Kinaz",
-     "islev":"ATP bağlanma ve fosforilasyon; sinyal iletim kaskadı.",
-     "tarla":"Sinyal yolu aktivasyonu — biyotik/abiyotik stres yanıtı."},
-    {"isim":"WRKY TF","motif":"WRKYGQK","kategori":"Transkripsiyon Faktörü",
-     "islev":"W-box DNA bağlanma; savunma geni ifadesini düzenler.",
-     "tarla":"Sistemik edinilmiş direnç (SAR) mekanizmasında rol oynar."},
-    {"isim":"PR-1 Peptidi","motif":"MKKLLAL","kategori":"PR Proteini",
-     "islev":"Salisilik asit yolunda patojene karşı savunma proteini.",
-     "tarla":"PR-1 ekspresyonu hastalık direncinin göstergesi."},
-    {"isim":"ABC Taşıyıcı","motif":"LSGGQ","kategori":"ABC Taşıyıcı Protein",
-     "islev":"ATP bağlama kaseti; membran geçişinde molekül taşınımı.",
-     "tarla":"İlaç/toksin direnci veya metabolit taşınımı."},
-    {"isim":"MYB Domaini","motif":"GRTWHTE","kategori":"MYB Transkripsiyon Faktörü",
-     "islev":"Pigment, çiçeklenme ve meyve olgunlaşması düzenleme.",
-     "tarla":"Meyve rengi, olgunlaşma zamanı ve aroma bileşiklerine etki."},
-    {"isim":"SOD Merkez","motif":"HVHAQY","kategori":"Antioksidan Enzim (SOD)",
-     "islev":"Süperoksit dismutaz; reaktif oksijen türlerini nötralize eder.",
-     "tarla":"Kuraklık, ısı stresi ve pestisit toleransıyla ilişkili."},
+
+# 15 ticari/bilimsel motif kütüphanesi
+MOTIF_KUTUPHANE: List[Dict] = [
+    {"isim":"NBS P-loop (Kinaz-1a)",   "motif":"GVGKTT",    "sinif":"NBS-LRR Direnç",
+     "islev":"Nükleotid bağlanma — NBS-LRR R-gen çekirdeği.",
+     "tarla":"Geniş spektrumlu patojen direnci."},
+    {"isim":"NBS Kinaz-2 (RNBS-A)",    "motif":"ILVDDE",    "sinif":"NBS-LRR Direnç",
+     "islev":"RNBS-A bölgesi; NBS etkinleştirme kaskadı.",
+     "tarla":"R-gen aktivasyonu — hipersensitivite yanıtı."},
+    {"isim":"LRR Tekrar Birimi",        "motif":"LXXLXLXX",  "sinif":"NBS-LRR Direnç",
+     "islev":"Lösin tekrarlı bölge; protein-protein etkileşim yüzeyi.",
+     "tarla":"Effektör tanıma spektrumunu belirler."},
+    {"isim":"TIR Domaini (TIR-NBS)",    "motif":"FLHFAD",    "sinif":"TIR-NBS-LRR",
+     "islev":"Toll/IL-1 reseptör domaini; sinyal iletimi.",
+     "tarla":"Dikotil bitkilerinde geniş dayanıklılık sınıfı."},
+    {"isim":"Kinaz DFG Motifi",         "motif":"DFG",       "sinif":"Serin/Treonin Kinaz",
+     "islev":"ATP bağlanma ve substrat fosforilasyonu.",
+     "tarla":"Savunma sinyal kaskadı aktivasyonu."},
+    {"isim":"Kinaz VAIK Motifi",        "motif":"VAIK",      "sinif":"Protein Kinaz",
+     "islev":"Kinaz-2 bölgesi; katalitik aktivite.",
+     "tarla":"Biyotik/abiyotik stres sinyal iletimi."},
+    {"isim":"WRKY Transkripsiyon Faktörü","motif":"WRKYGQK", "sinif":"TF — WRKY",
+     "islev":"W-box (TTGAC) DNA bağlanma; savunma geni ifadesi.",
+     "tarla":"Sistemik edinilmiş direnç (SAR) mekanizması."},
+    {"isim":"MYB DNA Bağlanma (R2R3)",  "motif":"GRTWHTE",   "sinif":"TF — MYB",
+     "islev":"R2R3-MYB; pigment ve olgunlaşma geni düzenleme.",
+     "tarla":"Meyve rengi, antosiyanin birikimi, olgunlaşma."},
+    {"isim":"MADS-Box Domaini",         "motif":"MGRNGKVEHI","sinif":"TF — MADS",
+     "islev":"MADS kutu; çiçeklenme ve meyve gelişimi.",
+     "tarla":"Olgunlaşma zamanı, meyve kalitesi (rin geni ailesi)."},
+    {"isim":"AP2/ERF Domaini",          "motif":"RAYDAWLKL", "sinif":"TF — ERF",
+     "islev":"Etilen yanıt faktörü; stres & olgunlaşma.",
+     "tarla":"Stres toleransı, hasat zamanlaması."},
+    {"isim":"PR-1 Sinyal Peptidi",      "motif":"MKKLLAL",   "sinif":"PR Proteini",
+     "islev":"Salisilik asit yolunda salgılanan savunma proteini.",
+     "tarla":"SAR markörü — PR-1 gen ifadesi."},
+    {"isim":"PR-5 (Osmotin/Taumatin)", "motif":"CCQCSPLDS", "sinif":"PR Proteini",
+     "islev":"Membran permeabilizasyonu; antifungal aktivite.",
+     "tarla":"Küf/fungal patojenlere karşı direnç."},
+    {"isim":"ABC Taşıyıcı (LSGGQ)",    "motif":"LSGGQ",     "sinif":"Taşıyıcı Protein",
+     "islev":"ATP bağlama kaseti; membran molekül taşınımı.",
+     "tarla":"Fitotoksin atımı, ilaç direnci benzeri mekanizma."},
+    {"isim":"SOD Katalitik Merkez",     "motif":"HVHAQY",    "sinif":"Antioksidan Enzim",
+     "islev":"Süperoksit dismutaz; ROS temizleme.",
+     "tarla":"Kuraklık, ısı ve oksidatif stres toleransı."},
+    {"isim":"HSP90 EEVD Terminali",     "motif":"EEVD",      "sinif":"Chaperone",
+     "islev":"Isı şoku proteini 90; protein katlanma yönetimi.",
+     "tarla":"Yüksek sıcaklık stres koruması."},
 ]
 
-@dataclass
-class ProteomikSonuc:
-    dna_uzunluk: int; aa_dizisi: str; aa_uzunluk: int
-    motifler: List[Dict]; protein_sinifi: str
-    fonksiyon: str; tarla_etkisi: str; guven: str
+# Hidrofobik amino asitler (Kyte-Doolittle pozitif)
+HIDROFOBIK = set("VILMFWP")
 
 
-class ProteomikYorumlayici:
-    @staticmethod
-    def _cevir(dna):
-        en_uzun = ""
-        for f in range(3):
-            aa = []
-            for i in range(f, len(dna)-2, 3):
-                k = dna[i:i+3]
-                if len(k)<3: break
-                h = _KODON.get(k,"X")
-                if h=="*": break
-                aa.append(h)
-            p = "".join(aa)
-            if len(p) > len(en_uzun): en_uzun = p
-        return en_uzun
-
-    @staticmethod
-    def _tara(aa):
-        bulunan = []
-        for m in _MOTIFLER:
-            pat = m["motif"].replace("X",".").replace("x",".")
-            try:
-                hits = list(re.finditer(pat, aa, re.IGNORECASE))
-            except re.error:
-                hits = []
-            if hits:
-                bulunan.append({**m, "konumlar": [h.start() for h in hits]})
-        return bulunan
-
-    def analiz_et(self, dizi):
-        lines = dizi.strip().splitlines()
-        dna   = "".join(l.strip() for l in lines if not l.startswith(">")).upper()
-        dna   = "".join(c for c in dna if c in "ACGTUNRYSWKMBDHV")
-        aa    = self._cevir(dna)
-        motifler = self._tara(aa)
-        siniflar = [m["kategori"] for m in motifler]
-        if "NBS-LRR Direnç Reseptörü" in siniflar:
-            ps, fn, te = ("NBS-LRR Direnç Reseptörü",
-                          "Patojen effektör tanıma ve hipersensitivite yanıtı tetikleme.",
-                          "Hastalık belirtisi görülmez veya minimize olur.")
-        elif "Serin/Treonin Kinaz" in siniflar:
-            ps, fn, te = ("Serin/Treonin Protein Kinaz",
-                          "Sinyal iletim kaskadı — stres veya gelişim sinyali.",
-                          "Biyotik/abiyotik stres yanıtı veya verim ile ilgili fenotip.")
-        elif any(x in siniflar for x in ["Transkripsiyon Faktörü","MYB Transkripsiyon Faktörü"]):
-            ps, fn, te = ("Transkripsiyon Faktörü",
-                          "Gen ifadesini düzenler (pigment, olgunlaşma veya savunma yolları).",
-                          "Meyve rengi, olgunlaşma zamanı veya stres toleransı.")
-        elif "ABC Taşıyıcı Protein" in siniflar:
-            ps, fn, te = ("ABC Taşıyıcı Protein",
-                          "Hücre zarından molekül geçişi; detoksifikasyon ve beslenme.",
-                          "Herbisit/fungisit direnci veya mineral alımı ile ilgili.")
-        elif "Antioksidan Enzim (SOD)" in siniflar:
-            ps, fn, te = ("Antioksidan Enzim (SOD)",
-                          "Reaktif oksijen türlerini nötralize eder.",
-                          "Kuraklık ve ısı toleransı artışı beklenir.")
-        elif motifler:
-            ps = motifler[0]["kategori"]
-            fn = motifler[0]["islev"]
-            te = motifler[0]["tarla"]
-        else:
-            ps = "Bilinmiyor / Yapısal Protein"
-            fn = "Bilinen motif bulunamadı. AlphaFold veya InterPro analizi önerilir."
-            te = "Fenotipik etki tahmin edilemiyor. Tarla doğrulaması gereklidir."
-        guven = (f"{'YÜKSEK' if len(motifler)>=2 else 'ORTA' if motifler else 'DÜŞÜK'} güven — "
-                 f"{len(motifler)} motif tespit edildi.")
-        return ProteomikSonuc(len(dna), aa[:80]+("..." if len(aa)>80 else ""),
-                              len(aa), motifler, ps, fn, te, guven)
+def dna_cevir(dna_str: str) -> str:
+    """DNA → Amino asit (en uzun ORF — 3 çerçeve)."""
+    dna = "".join(c for c in dna_str.upper().strip()
+                  if c in "ACGTUNRYSWKMBDHV")
+    en_uzun = ""
+    for f in range(3):
+        aa_list = []
+        for i in range(f, len(dna) - 2, 3):
+            kodon = dna[i:i+3]
+            if len(kodon) < 3:
+                break
+            h = KODON_TABLOSU.get(kodon, "X")
+            if h == "*":
+                break
+            aa_list.append(h)
+        peptid = "".join(aa_list)
+        if len(peptid) > len(en_uzun):
+            en_uzun = peptid
+    return en_uzun
 
 
-# ── M5: Populasyon Planlayıcısı ───────────────────────────────────────
+def biopython_cevir(dna_str: str) -> str:
+    """Biopython kullanılabilirse onunla çevir, yoksa dahili tabloyu kullan."""
+    if _BIO_OK:
+        try:
+            dna = "".join(c for c in dna_str.upper() if c in "ACGTUNRYSWKMBDHV")
+            dna = dna[:len(dna) - len(dna) % 3]
+            return str(Seq(dna).translate(to_stop=True))
+        except Exception:
+            pass
+    return dna_cevir(dna_str)
 
-@dataclass
-class PopulasyonPlan:
-    hedef_tanim: str; hedef_genler: List[str]
-    f1_genotip: Dict; f2_tablo: Dict[str,float]; hedef_p: float
-    min_bitki: int; tampon: int; toplam: int; secim: int
-    strateji: str; tavsiye: str
+
+def motif_tara(aa: str) -> List[Dict]:
+    """Amino asit dizisinde MOTIF_KUTUPHANE'yi tarar."""
+    bulunan = []
+    for m in MOTIF_KUTUPHANE:
+        pat = m["motif"].replace("X", ".").replace("x", ".")
+        try:
+            hits = list(re.finditer(pat, aa, re.IGNORECASE))
+        except re.error:
+            hits = []
+        if hits:
+            bulunan.append({**m, "konumlar": [h.start() for h in hits], "adet": len(hits)})
+    return bulunan
 
 
-class Planlayici:
-    @staticmethod
-    def _f1(ana, baba, genler):
-        f1 = {}
-        for g in genler:
-            ma, mb = ana.markor(g), baba.markor(g)
-            aa = ma.aleller if ma else (g[0].lower(), g[0].lower())
-            ab = mb.aleller if mb else (g[0].lower(), g[0].lower())
-            pair = tuple(sorted([aa[0], ab[0]], key=lambda x: (x.islower(), x)))
-            f1[g] = pair
-        return f1
+def hidrofobik_analiz(aa: str) -> Dict:
+    """Lösin yüzdesi ve genel hidrofobiklik oranını hesaplar."""
+    if not aa:
+        return {}
+    leucine_pct  = aa.count("L") / len(aa) * 100
+    hidrofob_pct = sum(1 for c in aa if c in HIDROFOBIK) / len(aa) * 100
+    return {
+        "leucine_pct" : round(leucine_pct, 1),
+        "hidrofob_pct": round(hidrofob_pct, 1),
+    }
 
-    @staticmethod
-    def _f2(f1):
-        def pn(a1,a2):
-            if a1.isupper() and a2.isupper(): return {"D":1.00,"r":0.00}
-            if a1.isupper() and a2.islower(): return {"D":0.75,"r":0.25}
-            return {"D":0.00,"r":1.00}
-        genler = list(f1.keys())
-        gen_p  = {g: pn(*f1[g]) for g in genler}
-        tablo  = {}
-        for kombin in itertools.product(["D","r"], repeat=len(genler)):
-            p  = 1.0; parcalar = []
-            for i, g in enumerate(genler):
-                d = kombin[i]; p *= gen_p[g][d]
-                parcalar.append(f"{g}:{'Dom' if d=='D' else 'Rec'}")
-            if p > 1e-9:
-                tablo[" | ".join(parcalar)] = round(p, 8)
-        hedef_e = " | ".join(f"{g}:Dom" for g in genler)
-        return tablo, tablo.get(hedef_e, 0.0)
 
-    @staticmethod
-    def _min(p, guven=GUVEN):
-        if p<=0: return 999_999
-        if p>=1: return 1
-        return math.ceil(math.log(1-guven)/math.log(1-p))
-
-    def planla(self, ana, baba, genler, tanim="", tampon_pct=0.20, secim_oran=0.25):
-        f1 = self._f1(ana, baba, genler)
-        tablo, p = self._f2(f1)
-        mn = self._min(p); tam = math.ceil(mn*tampon_pct); top = mn+tam
-        sec = math.ceil(top*secim_oran)
-        if p>=0.50:   st_str = "F2 Direkt Seçim — küçük popülasyon, düşük maliyet."
-        elif p>=0.25: st_str = "F2 Geniş Populasyon + MAS (Markör Destekli Seçim)."
-        elif p>=0.06: st_str = "F3 Backcross (BC1) + MAS kombinasyonu."
-        else:         st_str = "Piramitleme + çok nesil backcross — uzun vadeli plan."
-        tavsiye = (f"{'✅' if p>=0.25 else '⚠️' if p>=0.06 else '❌'} "
-                   f"F2 hedef p = %{p*100:.4f}. "
-                   f"Min {mn:,} + {tam:,} tampon = {top:,} bitki. {sec:,} birey F3'e.")
-        return PopulasyonPlan(
-            tanim or ", ".join(genler), genler,
-            {"".join(f1[g]): g for g in genler}, tablo, p,
-            mn, tam, top, sec, st_str, tavsiye
+def akilli_tahmin(motifler: List[Dict], aa: str) -> Optional[str]:
+    """
+    Motif eşleşmesi yoksa hidrofobiklik/lösin oranına göre çıkarım yapar.
+    Eşik: leucine ≥ 8% VE hidrofob ≥ 35% → savunma proteini benzerliği.
+    """
+    if motifler:
+        return None   # Motif zaten bulundu
+    if not aa or len(aa) < 20:
+        return None
+    h = hidrofobik_analiz(aa)
+    if h["leucine_pct"] >= 8.0 and h["hidrofob_pct"] >= 35.0:
+        return (
+            f"Tam motif eşleşmesi bulunamadı. Ancak bu proteindeki "
+            f"**%{h['hidrofob_pct']} hidrofobik amino asit** oranı ve "
+            f"**%{h['leucine_pct']} lösin (L)** yüzdesi yüksek bulundu. "
+            f"Bu bileşim, NBS-LRR veya LRR tekrar bölgelerine sahip "
+            f"**R-Gen (Direnç) proteini** yapısına benzemektedir. "
+            f"Yapısal doğrulama için AlphaFold / InterPro analizi önerilir."
         )
+    elif h["hidrofob_pct"] >= 45.0:
+        return (
+            f"Tam motif eşleşmesi bulunamadı. Yüksek hidrofobiklik (**%{h['hidrofob_pct']}**) "
+            f"bu dizinin bir **membran proteini veya taşıyıcı** olduğuna işaret edebilir. "
+            f"Dizi uzunluğu ve bağlam bilgisi ile değerlendirin."
+        )
+    return None
 
 
-# ─────────────────────────────────────────────────────────────────────
-# §4  ÖRNEK ENVANTER
-# ─────────────────────────────────────────────────────────────────────
+# ── §5.4  Genetic Detective (Akrabalık Analizi) ──────────────────────────────
 
-@st.cache_resource
-def demo_envanter() -> Inventory:
-    inv = Inventory()
-    PTO = ("ATGGAGAGTGGAATTTCAGATTTTAAGTTTGATGAAGATGATGATGACGATGATGATGATG"
-           "ATGATGATTCTTTTGGAGAGGGAGATGAAGGAAGTGCAAATGGAGAAAGCAGAAAAGATTC"
-           "TCAAGCTTTTGGAGAAGGTGATGTCAACCCTTGTGACGATAGACCTCTTGTTGGTGTTTCC"
-           "GGGAAAGCTGTAATAAAAGAACTGGATACAGAAGGGCTTGGAAGTGGGACTTCAGGTGTTG"
-           "AGCTTGTTTTGGAGAAAGAAGAAAAGCATCCCCTAGGAGTTGAGTTGGTTGTAAATGTAGA")
-    NBS = ("ATGGGCGTTGGCAAAACTACCATGCTTGCAGCTGATTTGCGTCAGAAGATGGCTGCAGAGCTGAAAGAT"
-           "CGCTTTGCGATGGTGGATGGCGTGGGCGAAGTGGACTCTTTTGGCGACTTCCTCAAAACACTCGCAGAG"
-           "GAGATCATTGGCGTCGTCAAAGATAGTAAACTCTATTTGTTGCTTCTTTTAAGTGGCAGGACTTGGCAT"
-           "GTTGGGCGGCGTACTTGGCATTTCAATGGGCGGACAAGAAGTTCCTCATACCGAGAGAGAGTGGGCGTT")
-    inv.ekle(BreederLine("BIO-TOM-001","Crimson Shield F6","Solanum lycopersicum",PTO,
-        PhysicalTraits("Koyu Kırmızı",182,8.5,72,5.2,14,["Fusarium","TMV","Pseudomonas"]),
-        [GeneticMarker("I","11q13",Alel.DOM_HOM,45,"Jones 1993"),
-         GeneticMarker("Tm-2a","9p",Alel.DOM_HOM,22,"Pelham 1966"),
-         GeneticMarker("Pto","5q",Alel.DOM_HOM,15,"Martin 1993"),
-         GeneticMarker("y","1p",Alel.REC_HOM,5,"Tomes 1954")],
-        ["kırmızı meyve","fusarium direnci","tmv direnci","virüs direnci","orta verim"]))
-    inv.ekle(BreederLine("BIO-TOM-002","GoldenYield HV-9","Solanum lycopersicum",None,
-        PhysicalTraits("Parlak Sarı",228,9.2,68,4.8,11),
-        [GeneticMarker("I","11q13",Alel.REC_HOM,45),
-         GeneticMarker("Tm-2a","9p",Alel.HET,22),
-         GeneticMarker("y","1p",Alel.DOM_HOM,5)],
-        ["sarı meyve","yüksek verim","ticari hat"]))
-    inv.ekle(BreederLine("BIO-TOM-003","LongLife Premium","Solanum lycopersicum",None,
-        PhysicalTraits("Kırmızı",195,7.8,78,5.8,24,["rin uzun raf ömrü"]),
-        [GeneticMarker("rin","5q",Alel.HET,12,"Giovannoni 2004"),
-         GeneticMarker("Mi-1.2","6p",Alel.DOM_HOM,33,"Rossi 1998"),
-         GeneticMarker("y","1p",Alel.REC_HOM,5)],
-        ["uzun raf ömrü","nematod direnci","raf ömrü","ihracat"]))
-    inv.ekle(BreederLine("BIO-TOM-004","SunGold Cherry","Solanum lycopersicum",None,
-        PhysicalTraits("Turuncu-Sarı",22,9.5,62,8.2,10),
-        [GeneticMarker("y","1p",Alel.DOM_HOM,5),
-         GeneticMarker("Tm-2a","9p",Alel.REC_HOM,22)],
-        ["sarı meyve","cherry","yüksek brix","gourmet","yüksek verim"]))
-    inv.ekle(BreederLine("BIO-TOM-005","Titan Robust F4","Solanum lycopersicum",NBS,
-        PhysicalTraits("Koyu Kırmızı",265,8.0,80,4.5,16,["Fusarium","Mi-1.2"]),
-        [GeneticMarker("I","11q13",Alel.DOM_HOM,45),
-         GeneticMarker("Mi-1.2","6p",Alel.DOM_HOM,33),
-         GeneticMarker("Tm-2a","9p",Alel.REC_HOM,22),
-         GeneticMarker("y","1p",Alel.REC_HOM,5)],
-        ["kırmızı meyve","fusarium direnci","nematod direnci","virüs direnci"]))
-    inv.ekle(BreederLine("BIO-TOM-006","Sunrise Export","Solanum lycopersicum",None,
-        PhysicalTraits("Sarı-Turuncu",185,8.8,74,5.0,20,["TMV","rin"]),
-        [GeneticMarker("y","1p",Alel.DOM_HOM,5),
-         GeneticMarker("rin","5q",Alel.HET,12),
-         GeneticMarker("Tm-2a","9p",Alel.DOM_HOM,22)],
-        ["sarı meyve","uzun raf ömrü","tmv direnci","virüs direnci","ihracat","yüksek verim"]))
-    inv.ekle(BreederLine("BIO-CAP-001","RedBlaze L4 F5","Capsicum annuum",None,
-        PhysicalTraits("Parlak Kırmızı",145,8.2,85,6.1,18,["L4 TMV","PVY"]),
-        [GeneticMarker("L","11q",Alel.DOM_HOM,18,"Boukema 1980"),
-         GeneticMarker("pvr","3q",Alel.REC_HOM,9,"Caranta 1997")],
-        ["kırmızı meyve","tmv direnci","pvy direnci","virüs direnci"]))
-    inv.ekle(BreederLine("BIO-CAP-002","YellowBell Export","Capsicum annuum",None,
-        PhysicalTraits("Sarı",198,7.5,90,5.5,14),
-        [GeneticMarker("L","11q",Alel.REC_HOM,18)],
-        ["sarı meyve","dolmalık biber","ihracat"]))
-    inv.ekle(BreederLine("BIO-CAP-003","Spicy Supreme","Capsicum annuum",None,
-        PhysicalTraits("Kırmızı-Turuncu",42,9.0,78,7.2,12,["Phytophthora"]),
-        [GeneticMarker("pvr","3q",Alel.HET,9),
-         GeneticMarker("L","11q",Alel.HET,18)],
-        ["acı biber","yüksek brix","yüksek verim","gourmet"]))
-    return inv
+def jaccard_benzerlik(s1: set, s2: set) -> float:
+    """Jaccard benzerlik skoru: |A∩B| / |A∪B|"""
+    if not s1 and not s2:
+        return 1.0
+    if not s1 or not s2:
+        return 0.0
+    return len(s1 & s2) / len(s1 | s2)
 
 
-# ─────────────────────────────────────────────────────────────────────
-# §5  GRAFİK YARDIMCILARI
-# ─────────────────────────────────────────────────────────────────────
+def ozellik_seti(satir: pd.Series) -> set:
+    """Bir hattın genetik özelliklerini ikili set olarak döndürür."""
+    ozellikler = set()
+    for g in GEN_SUTUNLARI:
+        if g in satir.index and satir[g] == 1:
+            ozellikler.add(g)
+    # Fenotipik etiketleri de ekle
+    if "etiketler" in satir.index and isinstance(satir["etiketler"], str):
+        for e in satir["etiketler"].split(","):
+            ozellikler.add(e.strip().lower())
+    return ozellikler
 
-def _ax_style(ax, title="", xlabel="", ylabel=""):
-    ax.set_facecolor(PANEL)
-    ax.set_title(title, color=MINT, fontsize=11, fontweight="bold", pad=10)
-    if xlabel: ax.set_xlabel(xlabel, color=WHT, fontsize=9)
-    if ylabel: ax.set_ylabel(ylabel, color=WHT, fontsize=9)
-    ax.tick_params(colors=GREY)
-    for sp in ax.spines.values(): sp.set_color(EDGE)
+
+def akrabalik_matrisi(df: pd.DataFrame) -> pd.DataFrame:
+    """Tüm hat çiftleri için Jaccard benzerlik matrisi oluşturur."""
+    ids    = df["hat_id"].tolist()
+    setler = [ozellik_seti(df.iloc[i]) for i in range(len(df))]
+    n      = len(ids)
+    mat    = np.zeros((n, n))
+    for i in range(n):
+        for j in range(n):
+            mat[i, j] = jaccard_benzerlik(setler[i], setler[j])
+    return pd.DataFrame(mat, index=ids, columns=ids)
 
 
-def fig_matchmaker(matches: List[MatchSonucu]):
-    if not matches or not _MPL_OK: return None
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4.5), facecolor=BG)
-    # — Bar: Uyum Puanı —
-    ax = axes[0]
-    isimler = [f"#{i+1}\n{m.ana.line_id[:8]}×{m.baba.line_id[:8]}" for i,m in enumerate(matches)]
-    puanlar = [m.puan for m in matches]
-    renkler = [MINT, GRN, GREY][:len(matches)]
-    bars = ax.bar(isimler, puanlar, color=renkler, edgecolor=EDGE, linewidth=0.8)
-    for b,p in zip(bars, puanlar):
-        ax.text(b.get_x()+b.get_width()/2, b.get_height()+0.5,
-                f"{p:.1f}", ha="center", fontsize=10, color=WHT, fontweight="bold")
-    ax.set_ylim(0, 115)
-    _ax_style(ax, "En İyi Eşleşmeler — Uyum Puanı", ylabel="Puan (0-100)")
-    # — Radar: F2 olasılık karşılaştırması —
-    ax2 = axes[1]
-    kategoriler = ["Uyum\nPuanı", "F2\nOlasılık", "Verim", "Raf\nÖmrü", "Markör"]
-    N = len(kategoriler)
-    import numpy as np
-    acılar = np.linspace(0, 2*np.pi, N, endpoint=False).tolist()
-    acılar += acılar[:1]
-    ax_r = fig.add_axes([0.555, 0.08, 0.42, 0.84], polar=True)
-    ax_r.set_facecolor(PANEL)
-    rk = [MINT, GRN, GREY]
-    for idx, m in enumerate(matches[:3]):
-        avg_v  = (m.ana.fiziksel.verim_skoru + m.baba.fiziksel.verim_skoru) / 2
-        avg_r  = (m.ana.fiziksel.raf_omru_gun + m.baba.fiziksel.raf_omru_gun) / 2
-        avg_mk = (len(m.ana.markorler) + len(m.baba.markorler)) / 2
-        vals = [m.puan/100, m.hedef_p_f2, avg_v/10, min(avg_r/30,1), min(avg_mk/10,1)]
-        vals += vals[:1]
-        ax_r.plot(acılar, vals, linewidth=1.8, color=rk[idx],
-                  label=f"#{idx+1} {m.ana.line_id[:5]}×{m.baba.line_id[:5]}")
-        ax_r.fill(acılar, vals, alpha=0.1, color=rk[idx])
-    ax_r.set_xticks(acılar[:-1]); ax_r.set_xticklabels(kategoriler, fontsize=8, color=WHT)
-    ax_r.tick_params(colors=GREY); ax_r.spines["polar"].set_color(EDGE)
-    ax_r.grid(color=EDGE, alpha=0.5)
-    ax_r.set_title("Çok Boyutlu Karşılaştırma", color=MINT, fontsize=10, fontweight="bold", pad=15)
-    ax_r.legend(loc="upper right", bbox_to_anchor=(1.4, 1.1), fontsize=8,
-                facecolor=PANEL, labelcolor=WHT, edgecolor=EDGE)
-    axes[1].axis("off")
-    plt.tight_layout()
+# ─────────────────────────────────────────────────────────────────────────────
+# §6  GRAFİK YARDIMCILARI (Plotly)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def plotly_layout(title: str = "") -> Dict:
+    """Standart koyu-yeşil Plotly layout şablonu."""
+    return dict(
+        title       = dict(text=title, font=dict(color=PAL["gold"], size=16)),
+        paper_bgcolor = PAL["bg"],
+        plot_bgcolor  = PAL["panel"],
+        font          = dict(color=PAL["grey_hi"], family="Inter, Segoe UI, sans-serif"),
+        xaxis         = dict(gridcolor=PAL["border"], zerolinecolor=PAL["border"]),
+        yaxis         = dict(gridcolor=PAL["border"], zerolinecolor=PAL["border"]),
+        legend        = dict(bgcolor=PAL["panel"], bordercolor=PAL["border"]),
+        margin        = dict(l=60, r=30, t=60, b=60),
+    )
+
+
+def fig_matchmaker_bar(df_res: pd.DataFrame) -> "go.Figure":
+    """Matchmaker sonuçları için yatay bar grafiği."""
+    fig = go.Figure()
+    etiketler = [f"{r['anne_adi'][:12]} × {r['baba_adi'][:12]}"
+                 for _, r in df_res.iterrows()]
+    fig.add_trace(go.Bar(
+        y=etiketler, x=df_res["skor"], orientation="h",
+        marker=dict(
+            color=df_res["skor"],
+            colorscale=[[0, PAL["green_dim"]], [0.5, PAL["green_mid"]], [1, PAL["green_hi"]]],
+            showscale=True,
+            colorbar=dict(title="Skor", tickfont=dict(color=PAL["grey_hi"])),
+        ),
+        text=[f"{s:.1f}" for s in df_res["skor"]],
+        textposition="outside",
+        textfont=dict(color=PAL["gold"]),
+        hovertemplate="%{y}<br>Skor: %{x:.1f}<extra></extra>",
+    ))
+    layout = plotly_layout("🏆 Matchmaker — Eşleşme Skorları")
+    layout["yaxis"]["autorange"] = "reversed"
+    layout["height"] = max(350, len(df_res) * 42)
+    fig.update_layout(**layout)
     return fig
 
 
-def fig_linkage(link_list: List[LinkageSonucu]):
-    if not link_list or not _MPL_OK: return None
-    fig, ax = plt.subplots(figsize=(9, 4.5), facecolor=BG)
-    ax.set_facecolor(PANEL)
-    rk_map = {"YÜKSEK": RED, "ORTA": YLW, "DÜŞÜK": GRN}
-    for s in link_list:
-        clr = rk_map.get(s.uyari_seviye, GREY)
-        ax.scatter(s.cm_mesafe, s.suruklenme_r*100, c=clr, s=180, zorder=5,
-                   edgecolors=EDGE, linewidth=0.8)
-        ax.annotate(f"{s.gen_hedef}↔{s.gen_surukle}",
-                    (s.cm_mesafe, s.suruklenme_r*100),
-                    textcoords="offset points", xytext=(7,5),
-                    fontsize=8, color=WHT)
-    ax.axvline(5,  color=RED,  linestyle="--", linewidth=1, alpha=0.7, label="5 cM (Kritik Eşik)")
-    ax.axvline(20, color=YLW, linestyle="--", linewidth=1, alpha=0.7, label="20 cM (Orta Eşik)")
-    for lbl, clr in [("Yüksek Risk",RED),("Orta Risk",YLW),("Düşük Risk",GRN)]:
-        ax.scatter([],[],c=clr,s=80,label=lbl)
-    ax.legend(fontsize=8, facecolor=PANEL, labelcolor=WHT, edgecolor=EDGE)
-    _ax_style(ax, "Linkage Drag Haritası", "Genetik Mesafe (cM)", "Sürüklenme Riski (%)")
-    plt.tight_layout(); return fig
+def fig_f_nesil(df_sim: pd.DataFrame, gen_adi: str) -> "go.Figure":
+    """F1-F4 nesil simülasyon çizgi grafiği."""
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df_sim["Nesil"], y=df_sim["Dominant Fenotip (%)"],
+        name="Dominant Fenotip (%)",
+        line=dict(color=PAL["green_hi"], width=2.5),
+        mode="lines+markers",
+        marker=dict(size=9, color=PAL["green_hi"]),
+        fill="tozeroy", fillcolor="rgba(74,222,128,0.08)",
+        hovertemplate="%{x}: %{y:.1f}%<extra>Dominant</extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=df_sim["Nesil"], y=df_sim["Homozigot Oran (%)"],
+        name="Homozigot Oran (%)",
+        line=dict(color=PAL["gold"], width=2.5, dash="dot"),
+        mode="lines+markers",
+        marker=dict(size=9, color=PAL["gold"]),
+        hovertemplate="%{x}: %{y:.1f}%<extra>Homozigot</extra>",
+    ))
+    layout = plotly_layout(f"⏱️ F1→F4 Sabitlenme Simülasyonu — {gen_adi}")
+    layout["yaxis"]["range"] = [0, 105]
+    layout["height"] = 380
+    fig.update_layout(**layout)
+    return fig
 
 
-def fig_f2(plan: PopulasyonPlan):
-    if not plan or not _MPL_OK: return None
-    fig, ax = plt.subplots(figsize=(9, 4), facecolor=BG)
-    ax.set_facecolor(PANEL)
-    hedef = " | ".join(f"{g}:Dom" for g in plan.hedef_genler)
-    labels = list(plan.f2_tablo.keys())
-    vals   = [v*100 for v in plan.f2_tablo.values()]
-    colors = [MINT if e == hedef else "#1e4d7b" for e in labels]
-    bars   = ax.bar(range(len(labels)), vals, color=colors, edgecolor=EDGE, linewidth=0.8)
-    for b,v in zip(bars, vals):
-        ax.text(b.get_x()+b.get_width()/2, b.get_height()+0.3,
-                f"{v:.1f}%", ha="center", fontsize=8, color=WHT)
-    ax.set_xticks(range(len(labels)))
-    ax.set_xticklabels([l[:20] for l in labels], rotation=32, ha="right", fontsize=7.5, color=WHT)
-    h_p = mpatches.Patch(color=MINT, label=f"Hedef fenotip (%{plan.hedef_p*100:.2f})")
-    o_p = mpatches.Patch(color="#1e4d7b", label="Diğer fenotip")
-    ax.legend(handles=[h_p,o_p], fontsize=8, facecolor=PANEL, labelcolor=WHT, edgecolor=EDGE)
-    _ax_style(ax, "F2 Fenotip Olasılık Dağılımı", ylabel="Olasılık (%)")
-    plt.tight_layout(); return fig
+def fig_risk_gauge(risk_pct: float, baslik: str = "Linkage Drag Riski") -> "go.Figure":
+    """Risk seviyesini gösteren gösterge (gauge) grafiği."""
+    renk = PAL["red"] if risk_pct > 70 else PAL["amber"] if risk_pct > 40 else PAL["green_mid"]
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=risk_pct,
+        title=dict(text=baslik, font=dict(color=PAL["gold"], size=14)),
+        number=dict(suffix="%", font=dict(color=renk, size=28)),
+        gauge=dict(
+            axis      = dict(range=[0, 100], tickcolor=PAL["grey_hi"]),
+            bar       = dict(color=renk),
+            bgcolor   = PAL["panel"],
+            bordercolor = PAL["border"],
+            steps     = [
+                dict(range=[0, 40],  color=PAL["green_dim"]),
+                dict(range=[40, 70], color=PAL["gold_dim"]),
+                dict(range=[70, 100],color="#450a0a"),
+            ],
+            threshold = dict(line=dict(color=PAL["red"], width=3), value=70),
+        ),
+    ))
+    fig.update_layout(paper_bgcolor=PAL["bg"], font=dict(color=PAL["grey_hi"]),
+                      height=280, margin=dict(l=30, r=30, t=50, b=20))
+    return fig
 
 
-def fig_scatter_matrix(inv: Inventory):
-    if not _MPL_OK: return None
-    fig, ax = plt.subplots(figsize=(9, 5), facecolor=BG)
-    ax.set_facecolor(PANEL)
-    tur_renk = {}; palet = [MINT, YLW, "#388bfd","#a371f7", RED]
-    tc = 0
-    for h in inv.hepsi():
-        if h.tur not in tur_renk:
-            tur_renk[h.tur] = palet[tc % len(palet)]; tc += 1
-    for h in inv.hepsi():
-        ax.scatter(h.fiziksel.verim_skoru, h.fiziksel.raf_omru_gun,
-                   color=tur_renk[h.tur], s=100, zorder=5, edgecolors=EDGE, linewidth=0.7)
-        ax.annotate(h.line_id, (h.fiziksel.verim_skoru, h.fiziksel.raf_omru_gun),
-                    textcoords="offset points", xytext=(5,4), fontsize=8, color=WHT)
-    for tur, clr in tur_renk.items():
-        ax.scatter([],[],color=clr,label=tur[:25],s=70)
-    ax.legend(fontsize=8, facecolor=PANEL, labelcolor=WHT, edgecolor=EDGE)
-    _ax_style(ax, "Hat Matrisi: Verim × Raf Ömrü", "Verim Skoru (1-10)", "Raf Ömrü (gün)")
-    plt.tight_layout(); return fig
+def fig_genetik_harita(df: pd.DataFrame) -> "go.Figure":
+    """
+    Genlerin cM pozisyonlarını interaktif scatter plot ile görselleştirir.
+    Her gen: yatay eksen = cM, dikey eksen = fiktif kromozom grubu.
+    """
+    gen_kolon_cM = {
+        "fusarium_I"  : ("fusarium_cM",   "Fusarium I",   "Chr 11", 0),
+        "tmv_Tm2a"    : ("tmv_cM",         "TMV Tm-2a",    "Chr 9",  1),
+        "nematod_Mi12": ("nematod_cM",     "Mi-1.2",       "Chr 6",  2),
+        "rin_gen"      : ("rin_cM",         "rin",          "Chr 5",  3),
+    }
+    fig = go.Figure()
+    # Her tür için farklı renk
+    tur_renk = {
+        "Solanum lycopersicum": PAL["green_hi"],
+        "Capsicum annuum"     : PAL["gold"],
+        "Cucumis melo"        : "#60a5fa",
+        "Citrullus lanatus"   : "#c084fc",
+    }
 
+    for gen_kolon, (cm_kolon, gen_adi, krom, y_pos) in gen_kolon_cM.items():
+        if cm_kolon not in df.columns:
+            continue
+        # Sadece bu geni taşıyan hatlar
+        alt = df[df[gen_kolon] == 1].copy()
+        if alt.empty:
+            continue
+        for tur, grup in alt.groupby("tur"):
+            cm_vals = grup[cm_kolon].values
+            fig.add_trace(go.Scatter(
+                x=[cm_vals.mean()],
+                y=[y_pos + np.random.uniform(-0.15, 0.15)],
+                mode="markers+text",
+                name=f"{gen_adi} ({tur.split()[0]})",
+                marker=dict(
+                    size=14,
+                    color=tur_renk.get(tur, PAL["grey_mid"]),
+                    symbol="diamond",
+                    line=dict(color=PAL["border"], width=1),
+                ),
+                text=[gen_adi],
+                textposition="top center",
+                textfont=dict(size=9, color=PAL["grey_hi"]),
+                hovertemplate=(
+                    f"<b>{gen_adi}</b><br>"
+                    f"Tür: {tur}<br>"
+                    f"cM: {cm_vals.mean():.1f}<br>"
+                    f"Hat sayısı: {len(grup)}<extra></extra>"
+                ),
+            ))
 
-# ─────────────────────────────────────────────────────────────────────
-# §6  STREAMLIT SAYFALARI
-# ─────────────────────────────────────────────────────────────────────
-
-def page_dashboard(inv: Inventory):
-    st.markdown("""
-    <div class="bv-hero">
-        <h1 style="font-size:2.6rem;margin-bottom:0.2rem">🧬 Biovalent Sentinel</h1>
-        <p style="color:#7de8c5;font-size:1.15rem;margin:0;letter-spacing:1.5px">
-            DECODING THE BONDS OF LIFE
-        </p>
-        <p style="color:#4a6a8a;font-size:0.85rem;margin-top:0.5rem">
-            v9.0 · Global Bioinformatics SaaS Platform
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # KPI satırı
-    hatlar = inv.hepsi()
-    turler = len(set(h.tur for h in hatlar))
-    dna_var = sum(1 for h in hatlar if h.dna_dizisi)
-    toplam_markor = sum(len(h.markorler) for h in hatlar)
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("🌱 Toplam Hat", len(inv))
-    c2.metric("🔬 Tür Sayısı", turler)
-    c3.metric("🧪 DNA Kayıtlı", f"{dna_var}/{len(inv)}")
-    c4.metric("📍 Toplam Markör", toplam_markor)
-
-    st.markdown("---")
-    col_l, col_r = st.columns([3, 2])
-    with col_l:
-        st.markdown("### 📋 Hat Envanteri")
-        import pandas as pd
-        df = pd.DataFrame(inv.listele())
-        st.dataframe(df, use_container_width=True, height=320)
-    with col_r:
-        st.markdown("### 🗺️ Verim × Raf Ömrü Matrisi")
-        fig = fig_scatter_matrix(inv)
-        if fig: st.pyplot(fig, use_container_width=True)
-
-    st.markdown("---")
-    st.markdown("### 📚 Platform Modülleri")
-    m1, m2, m3, m4 = st.columns(4)
-    with m1:
-        st.markdown("""<div class="bv-card">
-            <h4 style="color:#00ffaa">🧬 Matchmaker</h4>
-            <p style="color:#8ab0cc;font-size:0.87rem">
-            Hedef fenotipe en uygun ebeveyn çiftlerini otomatik sıralar.
-            Mendel + etiket + fenotip uyum skoru kullanır.</p>
-        </div>""", unsafe_allow_html=True)
-    with m2:
-        st.markdown("""<div class="bv-card">
-            <h4 style="color:#ffd166">⚠️ Risk Engine</h4>
-            <p style="color:#8ab0cc;font-size:0.87rem">
-            Linkage drag'i Haldane harita fonksiyonu ile hesaplar.
-            Rekombinasyon için gereken bitki sayısını verir.</p>
-        </div>""", unsafe_allow_html=True)
-    with m3:
-        st.markdown("""<div class="bv-card">
-            <h4 style="color:#7de8c5">🔍 Genetic Detective</h4>
-            <p style="color:#8ab0cc;font-size:0.87rem">
-            Bilinmeyen hibritin olası ebeveynlerini k-mer Jaccard
-            ve IBS kinship analizi ile tahmin eder.</p>
-        </div>""", unsafe_allow_html=True)
-    with m4:
-        st.markdown("""<div class="bv-card">
-            <h4 style="color:#a78bfa">🧪 Proteomic Insights</h4>
-            <p style="color:#8ab0cc;font-size:0.87rem">
-            DNA → amino asit çevirisi ve motif taraması ile
-            protein sınıfı ve tarla etkisini yorumlar.</p>
-        </div>""", unsafe_allow_html=True)
-
-    st.markdown("---")
-    st.caption(f"© {datetime.now().year} {FIRMA} · {SLOGAN} · v{VER}")
-
-
-def page_matchmaker(inv: Inventory):
-    st.markdown("## 🧬 Matchmaker — Akıllı Ebeveyn Seçici")
-    st.info("Hedef fenotip etiketleri ve markör genlerini girerek envanterdeki en uyumlu ebeveyn çiftlerini bulun.", icon="ℹ️")
-
-    with st.expander("📖 Algoritma Açıklaması", expanded=False):
-        st.markdown("""
-        **Uyum Puanı (0-100)** şu üç bileşenden oluşur:
-        - **Etiket eşleşmesi (%50)** — Hedef etiketlerin Ana+Baba etiket havuzunda bulunma oranı
-        - **Markör uyumu (%30)** — Dominant markör sayısına göre genetik uyum
-        - **Fenotipik yakınlık (%20)** — Normalize edilmiş verim × raf ömrü ortalaması
-
-        **F2 Hedef Olasılığı** — Mendel bağımsız ayrışma yasasına göre F1×F1 çaprazlamasında
-        tüm hedef genlerin dominant fenotipte görülme olasılığı.
-        """)
-
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        hedef_str = st.text_input(
-            "🎯 Hedef Etiketler (virgülle ayırın)",
-            value="sarı meyve, uzun raf ömrü, virüs direnci",
-            help="Örn: sarı meyve, fusarium direnci, yüksek verim"
+    # Kromozom çubukları (arka plan çizgisi)
+    for i, (_, (_, gen_adi, krom, y_pos)) in enumerate(gen_kolon_cM.items()):
+        fig.add_shape(
+            type="line", x0=0, x1=100, y0=y_pos, y1=y_pos,
+            line=dict(color=PAL["border"], width=2, dash="dot"),
         )
-        hedef_genler_str = st.text_input(
-            "🧬 Mendel Analizi için Gen Listesi (virgülle ayırın)",
-            value="y, rin, Tm-2a",
-            help="Örn: I, Tm-2a, y  — Büyük/küçük harf duyarsız"
-        )
-    with col2:
-        n_eslesme = st.slider("En İyi Kaç Eşleşme?", 1, 5, 3)
-        tür_filtre = st.selectbox(
-            "Tür Filtresi (opsiyonel)",
-            ["Tümü"] + list(set(h.tur for h in inv.hepsi()))
+        fig.add_annotation(
+            x=-2, y=y_pos, text=krom, showarrow=False,
+            font=dict(color=PAL["gold"], size=11), xanchor="right",
         )
 
-    if st.button("🚀 Eşleştirme Analizini Başlat", key="mm_btn"):
-        hedefler  = [h.strip() for h in hedef_str.split(",") if h.strip()]
-        genler    = [g.strip() for g in hedef_genler_str.split(",") if g.strip()]
+    # Tehlike bölgesi (< 10 cM arası)
+    fig.add_vrect(
+        x0=0, x1=10, fillcolor="rgba(248,113,113,0.07)",
+        annotation_text="⚠ Yakın Bağlantı Bölgesi (<10 cM)",
+        annotation_font_color=PAL["red"],
+        line_width=0,
+    )
 
-        # Tür filtresi
-        filtreli_inv = Inventory()
-        for h in inv.hepsi():
-            if tür_filtre == "Tümü" or h.tur == tür_filtre:
-                filtreli_inv.ekle(h)
+    layout = plotly_layout("🗺️ Dinamik Genetik Harita — Kromozom cM Konumları")
+    layout["xaxis"] = dict(
+        title="Genetik Mesafe (centiMorgan)",
+        gridcolor=PAL["border"],
+        range=[-5, 105],
+        tickfont=dict(color=PAL["grey_hi"]),
+    )
+    layout["yaxis"] = dict(
+        tickvals=list(range(len(gen_kolon_cM))),
+        ticktext=[f"Chr {i+1}" for i in range(len(gen_kolon_cM))],
+        gridcolor=PAL["border"],
+        tickfont=dict(color=PAL["grey_hi"]),
+    )
+    layout["height"]      = 380
+    layout["showlegend"]  = True
+    layout["legend"]["title"] = dict(text="Gen · Tür", font=dict(color=PAL["gold"]))
+    fig.update_layout(**layout)
+    return fig
 
-        if len(filtreli_inv) < 2:
-            st.warning("En az 2 hat gereklidir. Tür filtresini genişletin.", icon="⚠️")
-            return
 
-        with st.spinner("Genetik uyum analizi yapılıyor..."):
-            mm = Matchmaker()
-            sonuclar = mm.en_iyi(filtreli_inv, hedefler, genler, n_eslesme)
+def fig_heatmap(mat: pd.DataFrame) -> "go.Figure":
+    """Akrabalık (Jaccard benzerlik) ısı haritası."""
+    # Kısa ID etiketleri
+    ids_kisa = [i[:12] for i in mat.index.tolist()]
+    fig = go.Figure(go.Heatmap(
+        z=mat.values,
+        x=ids_kisa,
+        y=ids_kisa,
+        colorscale=[
+            [0.0, PAL["bg"]],
+            [0.3, PAL["green_dim"]],
+            [0.7, PAL["green_mid"]],
+            [1.0, PAL["green_hi"]],
+        ],
+        zmin=0, zmax=1,
+        colorbar=dict(
+            title="Jaccard<br>Benzerliği",
+            tickfont=dict(color=PAL["grey_hi"]),
+            titlefont=dict(color=PAL["gold"]),
+        ),
+        hovertemplate="Hat-1: %{y}<br>Hat-2: %{x}<br>Benzerlik: %{z:.3f}<extra></extra>",
+    ))
+    layout = plotly_layout("🔥 Genetik Akrabalık Isı Haritası (Jaccard Benzerliği)")
+    layout["xaxis"]["tickangle"] = -45
+    layout["xaxis"]["tickfont"]  = dict(size=9, color=PAL["grey_hi"])
+    layout["yaxis"]["tickfont"]  = dict(size=9, color=PAL["grey_hi"])
+    n = len(mat)
+    layout["height"] = max(400, n * 30 + 120)
+    fig.update_layout(**layout)
+    return fig
 
-        if not sonuclar:
-            st.error("Uyumlu çift bulunamadı. Hedefleri veya tür filtresini gözden geçirin.")
-            return
 
-        st.success(f"✅ {len(sonuclar)} eşleşme bulundu.", icon="✅")
+def fig_proteomic_bar(motifler: List[Dict]) -> "go.Figure":
+    """Bulunan motifleri ve adet bilgisini gösteren bar grafiği."""
+    if not motifler:
+        return None
+    isimsler = [m["isim"][:30] for m in motifler]
+    adetler  = [m["adet"] for m in motifler]
+    siniflar = [m["sinif"] for m in motifler]
+    renk_map = {
+        "NBS-LRR Direnç"    : PAL["green_hi"],
+        "TIR-NBS-LRR"       : PAL["green_mid"],
+        "Serin/Treonin Kinaz": PAL["gold"],
+        "Protein Kinaz"     : PAL["amber"],
+        "TF — WRKY"         : "#60a5fa",
+        "TF — MYB"          : "#c084fc",
+        "TF — MADS"         : "#f97316",
+        "TF — ERF"          : "#34d399",
+        "PR Proteini"       : "#fb7185",
+        "Taşıyıcı Protein"  : PAL["grey_mid"],
+        "Antioksidan Enzim" : "#a3e635",
+        "Chaperone"         : "#fbbf24",
+    }
+    renkler = [renk_map.get(s, PAL["grey_mid"]) for s in siniflar]
+    fig = go.Figure(go.Bar(
+        y=isimsler, x=adetler, orientation="h",
+        marker=dict(color=renkler, line=dict(color=PAL["border"], width=0.5)),
+        text=[f"{a}×" for a in adetler],
+        textposition="outside",
+        textfont=dict(color=PAL["gold"]),
+        hovertemplate="%{y}<br>Eşleşme sayısı: %{x}<extra></extra>",
+    ))
+    layout = plotly_layout("🔬 Tespit Edilen Protein Motifleri")
+    layout["yaxis"]["autorange"] = "reversed"
+    layout["height"] = max(300, len(motifler) * 45)
+    fig.update_layout(**layout)
+    return fig
 
-        # Metrik satırı
-        best = sonuclar[0]
-        m1, m2, m3 = st.columns(3)
-        m1.metric("🥇 En İyi Puan", f"{best.puan:.1f}/100")
-        m2.metric("F2 Hedef Olasılığı", f"%{best.hedef_p_f2*100:.2f}")
-        m3.metric("Karşılanan Hedefler", f"{len(best.karsilanan)}/{len(hedefler)}")
 
-        # Grafik
-        fig = fig_matchmaker(sonuclar)
-        if fig:
-            st.pyplot(fig, use_container_width=True)
+# ─────────────────────────────────────────────────────────────────────────────
+# §7  SIDEBAR (Veri Yükleme + Navigasyon)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def sidebar_render() -> pd.DataFrame:
+    """Sidebar'ı render eder, veri çerçevesini döndürür."""
+    with st.sidebar:
+        # Logo & başlık
+        st.markdown(f"""
+        <div style="text-align:center;padding:1rem 0 0.5rem">
+          <div style="font-size:2.4rem">🧬</div>
+          <div style="color:{PAL['green_hi']};font-weight:800;font-size:1.18rem;
+                      letter-spacing:1.5px">BIOVALENT</div>
+          <div style="color:{PAL['grey_mid']};font-size:0.70rem;letter-spacing:3px;
+                      margin-top:2px">SENTINEL v{VER}</div>
+          <div style="color:{PAL['gold']};font-size:0.72rem;
+                      margin-top:6px;font-style:italic">
+            {SLOGAN}
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
 
         st.markdown("---")
-        st.markdown("### 🏆 Sıralı Eşleşme Raporu")
+        st.markdown(f"### 📁 Veri Yükleme")
+        st.caption("Excel (.xlsx) veya CSV dosyası yükleyin. Yüklemezseniz demo veri kullanılır.")
 
-        madalya = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
-        for i, s in enumerate(sonuclar):
-            with st.expander(
-                f"{madalya[i]}  #{i+1}  —  {s.ana.line_id} (♀) × {s.baba.line_id} (♂)"
-                f"  |  Puan: {s.puan:.1f}/100",
-                expanded=(i==0)
-            ):
-                c_l, c_r = st.columns(2)
-                with c_l:
-                    st.markdown(f"**Ana (♀):** `{s.ana.line_id}` — {s.ana.adi}")
-                    st.markdown(f"**Baba (♂):** `{s.baba.line_id}` — {s.baba.adi}")
-                    st.markdown(f"**F1 Hedef p:** %{s.hedef_p_f1*100:.1f}")
-                    st.markdown(f"**F2 Hedef p:** %{s.hedef_p_f2*100:.4f}")
-                with c_r:
-                    if s.karsilanan:
-                        st.success("✅ Karşılanan: " + ", ".join(s.karsilanan))
-                    if s.eksik:
-                        st.warning("⚠️ Eksik: " + ", ".join(s.eksik))
-                    else:
-                        st.success("Tüm hedefler karşılanabilir!")
-                st.info(s.yorum, icon="💡")
+        dosya = st.file_uploader(
+            "Hat Envanteri",
+            type=["xlsx", "csv"],
+            help="Gerekli sütunlar: hat_id, hat_adi, tur, verim_t_ha, raf_omru_gun, "
+                 "hasat_gunu, brix, fusarium_I, tmv_Tm2a, nematod_Mi12, rin_gen, pto_gen, "
+                 "fusarium_cM, tmv_cM, nematod_cM, rin_cM, etiketler",
+        )
 
-                # Populasyon planı butonu
-                if st.button(f"📊 Bu çift için Populasyon Planı Oluştur",
-                             key=f"pop_{i}_{s.ana.line_id}"):
-                    pl = Planlayici()
-                    plan = pl.planla(s.ana, s.baba, genler,
-                                     f"{s.ana.line_id} × {s.baba.line_id}")
-                    st.markdown("#### 🌱 F1 Genotipi")
-                    for geno, gen in plan.f1_genotip.items():
-                        st.code(f"{gen:>10}  →  {geno}")
-                    st.markdown("#### 📊 Populasyon Büyüklüğü")
-                    pc1, pc2, pc3, pc4 = st.columns(4)
-                    pc1.metric("Minimum Bitki", f"{plan.min_bitki:,}")
-                    pc2.metric("+ Tampon", f"{plan.tampon:,}")
-                    pc3.metric("Toplam F2", f"{plan.toplam:,}")
-                    pc4.metric("Seçim Havuzu (→F3)", f"{plan.secim:,}")
-                    fig_f2_chart = fig_f2(plan)
-                    if fig_f2_chart:
-                        st.pyplot(fig_f2_chart, use_container_width=True)
-                    st.info(plan.tavsiye, icon="📋")
+        df = None
+        if dosya is not None:
+            try:
+                if dosya.name.endswith(".csv"):
+                    df = pd.read_csv(dosya)
+                else:
+                    df = pd.read_excel(dosya)
+                st.success(f"✅ {len(df)} hat yüklendi: **{dosya.name}**", icon="✅")
+            except Exception as exc:
+                st.error(f"Dosya okunamadı: {exc}", icon="❌")
+                df = None
+
+        if df is None:
+            df = demo_veri()
+            st.info("📊 Demo veri seti kullanılıyor (25 hat).", icon="ℹ️")
+
+        st.markdown("---")
+
+        # Özet metrikleri
+        st.markdown(f"**📋 Envanter Özeti**")
+        c1, c2 = st.columns(2)
+        c1.metric("Toplam Hat", len(df))
+        c2.metric("Tür Sayısı", df["tur"].nunique() if "tur" in df.columns else "—")
+
+        if "verim_t_ha" in df.columns:
+            st.metric("Ort. Verim (t/ha)", f"{df['verim_t_ha'].mean():.1f}")
+        if "raf_omru_gun" in df.columns:
+            st.metric("Ort. Raf Ömrü (gün)", f"{df['raf_omru_gun'].mean():.0f}")
+
+        st.markdown("---")
+        st.markdown(f"""
+        <div style="color:{PAL['grey_mid']};font-size:0.73rem;line-height:1.7">
+          <b style="color:{PAL['green_mid']}">Bilimsel Kaynaklar</b><br>
+          Jones et al. (1993) — <i>I</i> geni<br>
+          Pelham (1966) — <i>Tm-2a</i><br>
+          Martin et al. (1993) — <i>Pto</i><br>
+          Giovannoni (2004) — <i>rin</i><br>
+          Rossi et al. (1998) — <i>Mi-1.2</i><br>
+          Haldane (1919) — Harita Fonksiyonu
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown(f"""
+        <div style="color:{PAL['grey_mid']};font-size:0.70rem;text-align:center">
+          © {datetime.now().year} {FIRMA}<br>
+          Bağımsız SaaS Platformu
+        </div>
+        """, unsafe_allow_html=True)
+
+    return df
 
 
-def page_risk_engine(inv: Inventory):
-    st.markdown("## ⚠️ Risk Engine — Genetik Bağlantı & Linkage Drag Analizi")
-    st.info(
-        "Belirtilen genler için bilinen genetik bağlantı verilerini analiz eder. "
-        "Yüksek risk, istenmeyen genlerin hedef genlerle birlikte kalıtılma olasılığını gösterir.",
-        icon="ℹ️"
+# ─────────────────────────────────────────────────────────────────────────────
+# §8  SEKMELERİ RENDER ET
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── §8.1  Matchmaker ─────────────────────────────────────────────────────────
+
+def sekme_matchmaker(df: pd.DataFrame) -> None:
+    st.markdown("## 🧬 Matchmaker — Eşleştirme Motoru")
+    st.markdown(
+        "Hedef özellikleri seçin; sistem envanterdeki hatları tarayıp "
+        "**Anne × Baba** çaprazlama adaylarını F2 Mendel olasılıkları ve "
+        "fenotip uyumuyla 100 üzerinden puanlar."
+    )
+
+    with st.expander("📖 Skor Hesaplama Metodolojisi", expanded=False):
+        st.markdown("""
+        | Bileşen | Ağırlık | Açıklama |
+        |---|---|---|
+        | **Gen Uyumu** | %50 | Her hedef gen için F2 dominant fenotip olasılığı (Mendel) |
+        | **Fenotipik Uyum** | %30 | Verim, raf ömrü ve brix normalize ortalaması |
+        | **Tür Uyumu** | %20 | Aynı tür çiftlere tam puan, türlerarası sıfır |
+
+        F2 olasılık kuralları: AA×AA → %100, Aa×aa → %75, aa×aa → %0
+        """)
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown("**🎯 Hastalık Direnci Hedefleri**")
+        h_fusarium  = st.checkbox("🛡️ Fusarium Direnci (I geni)",   value=True)
+        h_tmv       = st.checkbox("🦠 TMV Direnci (Tm-2a)",          value=True)
+        h_nematod   = st.checkbox("🪱 Nematod Direnci (Mi-1.2)",     value=False)
+        h_pto       = st.checkbox("🔬 Pseudomonas Direnci (Pto)",    value=False)
+        h_rin       = st.checkbox("⏳ Uzun Raf Ömrü — rin geni",      value=False)
+
+    with col2:
+        st.markdown("**📈 Fenotipik Hedefler**")
+        h_yverim = st.checkbox("📦 Yüksek Verim (≥18 t/ha)",  value=True)
+        h_yraf   = st.checkbox("🗓️ Uzun Raf Ömrü (≥18 gün)", value=False)
+        h_ybrix  = st.checkbox("🍬 Yüksek Brix (≥7°)",        value=False)
+
+    with col3:
+        st.markdown("**⚙️ Filtreler**")
+        tür_seç = st.selectbox(
+            "Tür Filtresi",
+            ["Tümü"] + sorted(df["tur"].unique().tolist()) if "tur" in df.columns else ["Tümü"],
+        )
+        top_n = st.slider("Kaç Sonuç Göster?", 3, 20, 8)
+
+    hedef_genler: List[str] = []
+    if h_fusarium: hedef_genler.append("fusarium_I")
+    if h_tmv:      hedef_genler.append("tmv_Tm2a")
+    if h_nematod:  hedef_genler.append("nematod_Mi12")
+    if h_pto:      hedef_genler.append("pto_gen")
+    if h_rin:      hedef_genler.append("rin_gen")
+
+    hedef_fenotip: List[str] = []
+    if h_yverim: hedef_fenotip.append("yüksek_verim")
+    if h_yraf:   hedef_fenotip.append("uzun_raf")
+    if h_ybrix:  hedef_fenotip.append("yüksek_brix")
+
+    if st.button("🚀 Eşleştirme Analizini Başlat", key="mm_btn"):
+        if not hedef_genler and not hedef_fenotip:
+            st.warning("Lütfen en az bir hedef özellik seçin.", icon="⚠️")
+            return
+        try:
+            with st.spinner("Genetik uyum analizi yapılıyor..."):
+                res = en_iyi_eslesme(df, hedef_genler, hedef_fenotip, tür_seç, top_n)
+
+            if res.empty:
+                st.error("Uyumlu çift bulunamadı. Filtreleri genişletin.", icon="❌")
+                return
+
+            st.success(f"✅ {len(res)} eşleşme adayı bulundu.", icon="✅")
+
+            # KPI satırı
+            best = res.iloc[0]
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("🥇 En Yüksek Skor", f"{best['skor']:.1f}/100")
+            m2.metric("Gen Uyum Skoru", f"{best['gen_skoru']:.1f}/50")
+            m3.metric("Fenotip Skoru",   f"{best['feno_skoru']:.1f}/30")
+            m4.metric("Tür Skoru",       f"{best['tur_skoru']:.1f}/20")
+
+            # Bar grafiği
+            if _PLT_OK:
+                st.plotly_chart(fig_matchmaker_bar(res), use_container_width=True)
+
+            # Sonuç tablosu
+            st.markdown("### 📋 Eşleşme Sonuçları")
+            gorsel_df = res[["anne_id","anne_adi","baba_id","baba_adi","tur","skor",
+                             "gen_skoru","feno_skoru","tur_skoru"]].copy()
+            gorsel_df.columns = ["Anne ID","Anne Adı","Baba ID","Baba Adı","Tür",
+                                 "Skor","Gen Skoru","Fenotip Skoru","Tür Skoru"]
+            st.dataframe(
+                gorsel_df.style.background_gradient(subset=["Skor"],
+                    cmap="Greens").format({"Skor": "{:.1f}","Gen Skoru":"{:.1f}",
+                    "Fenotip Skoru":"{:.1f}","Tür Skoru":"{:.1f}"}),
+                use_container_width=True,
+            )
+
+            # En iyi çift detayı
+            st.markdown("---")
+            st.markdown(f"### 🥇 En İyi Çift: `{best['anne_adi']}` × `{best['baba_adi']}`")
+            with st.expander("Gen Bazında Detaylı Analiz", expanded=True):
+                if best["gen_detay"]:
+                    det_df = pd.DataFrame(
+                        list(best["gen_detay"].items()),
+                        columns=["Gen / Özellik", "F2 Başarı Olasılığı (%)"]
+                    )
+                    st.dataframe(det_df, use_container_width=True)
+                else:
+                    st.info("Gen hedefi seçilmedi; sadece fenotip skoru kullanıldı.")
+
+        except Exception as exc:
+            st.error(f"Analiz hatası: {exc}", icon="❌")
+            st.code(traceback.format_exc())
+
+
+# ── §8.2  Risk Engine & Simulation ───────────────────────────────────────────
+
+def sekme_risk(df: pd.DataFrame) -> None:
+    st.markdown("## ⚠️ Risk Engine & Simülasyon")
+    st.markdown(
+        "**Linkage Drag Analizi:** Seçilen iki genin cM mesafesine göre "
+        "birlikte kalıtılma riskini hesaplar. "
+        "**F4 Simülasyonu:** F1'den F4'e dominantlık ve homozigotluk eğrisini çizer."
     )
 
     with st.expander("📖 Bilimsel Temel", expanded=False):
         st.markdown("""
-        **Haldane Harita Fonksiyonu:**  `r = 0.5 × (1 − e^(−2d/100))`
+        **Haldane Harita Fonksiyonu:** `r = 0.5 × (1 − e^(−2d/100))`
 
-        Burada `d` = centiMorgan (cM) cinsinden genetik mesafe, `r` = rekombinasyon frekansı.
+        - `d` = centiMorgan (cM) cinsinden genetik mesafe
+        - `r` = Rekombinasyon frekansı (0-0.5 arası)
 
-        **Rekombinan Bitki Sayısı:** `n = ⌈ log(0.05) / log(1 − r) ⌉`  (%95 güven)
+        **Bitki Sayısı:** `n = ⌈log(0.05)/log(1−r)⌉` (%95 güven)
 
-        | cM Mesafe | Risk | Yorum |
+        **F-Nesil Sabitlenme (selfing):** Her nesil heterozigot oran yarıya iner.
+        `Homozigot% = (1 − (1/2)^(n−1)) × 100`
+
+        | cM | Risk | Yorum |
         |---|---|---|
-        | < 5 cM | 🔴 Yüksek | Neredeyse her zaman birlikte kalıtılır |
-        | 5–20 cM | 🟡 Orta | Linkage drag olası; izleme gerekli |
-        | > 20 cM | 🟢 Düşük | Rekombinasyon görece kolay |
+        | <5 | 🔴 KRİTİK | Neredeyse her zaman birlikte kalıtılır |
+        | 5–15 | 🟠 YÜKSEK | Geniş populasyon + MAS gerekli |
+        | 15–30 | 🟡 ORTA | Yönetilebilir; MAS önerilir |
+        | >30 | 🟢 DÜŞÜK | Büyük ölçüde bağımsız ayrışır |
         """)
 
-    gen_str = st.text_input(
-        "🧬 Analiz Edilecek Genler (virgülle ayırın)",
-        value="Tm-2a, rin, I, y",
-        help="Dahili linkage haritasında bulunan genler analiz edilir."
-    )
+    col_sol, col_sag = st.columns(2)
 
-    st.markdown("**İsteğe Bağlı: Özel cM Haritası**")
-    custom_cols = st.columns(3)
-    with custom_cols[0]: c_gen_a = st.text_input("Gen A", placeholder="örn. MyGene")
-    with custom_cols[1]: c_gen_b = st.text_input("Gen B", placeholder="örn. OtherGene")
-    with custom_cols[2]: c_cm    = st.number_input("cM Mesafe", 0.0, 200.0, 10.0, step=0.5)
-
-    if st.button("🔍 Risk Analizini Başlat", key="risk_btn"):
-        genler = [g.strip() for g in gen_str.split(",") if g.strip()]
-        ek_map = {}
-        if c_gen_a and c_gen_b and c_cm > 0:
-            ek_map[c_gen_a] = {c_gen_b: c_cm}
-            ek_map[c_gen_b] = {c_gen_a: c_cm}
-
-        with st.spinner("Linkage haritası analiz ediliyor..."):
-            eng = LinkageDragEngine()
-            sonuclar = eng.analiz_et(genler, ek_map if ek_map else None)
-
-        if not sonuclar:
-            st.success("✅ Analiz edilen genler arasında bilinen linkage bulunamadı.", icon="✅")
-            return
-
-        # Özet metrikler
-        yuksek = sum(1 for s in sonuclar if s.uyari_seviye == "YÜKSEK")
-        orta   = sum(1 for s in sonuclar if s.uyari_seviye == "ORTA")
-        dusuk  = sum(1 for s in sonuclar if s.uyari_seviye == "DÜŞÜK")
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Toplam Bağlantı", len(sonuclar))
-        m2.metric("🔴 Yüksek Risk", yuksek)
-        m3.metric("🟡 Orta Risk", orta)
-        m4.metric("🟢 Düşük Risk", dusuk)
-
-        # Grafik
-        fig = fig_linkage(sonuclar)
-        if fig:
-            st.pyplot(fig, use_container_width=True)
-
-        st.markdown("---")
-        st.markdown("### 📋 Detaylı Risk Raporu")
-        for s in sonuclar:
-            sev_map = {"YÜKSEK": "error", "ORTA": "warning", "DÜŞÜK": "success"}
-            sev_icon = {"YÜKSEK": "🔴", "ORTA": "🟡", "DÜŞÜK": "🟢"}
-            fn = {"error": st.error, "warning": st.warning, "success": st.success}
-            with st.expander(
-                f"{sev_icon[s.uyari_seviye]}  {s.gen_hedef} ↔ {s.gen_surukle}"
-                f"  |  {s.cm_mesafe:.1f} cM  |  Risk: {s.uyari_seviye}",
-                expanded=(s.uyari_seviye == "YÜKSEK")
-            ):
-                cc1, cc2, cc3 = st.columns(3)
-                cc1.metric("Genetik Mesafe", f"{s.cm_mesafe:.1f} cM")
-                cc2.metric("Rekombinasyon p", f"%{s.rekomb_p*100:.2f}")
-                cc3.metric("Gerekli Bitki", f"{s.gerekli_bitki:,}")
-                fn[sev_map[s.uyari_seviye]](s.aciklama)
-
-
-def page_detective(inv: Inventory):
-    st.markdown("## 🔍 Genetic Detective — Tersine Soy Ağacı")
-    st.info(
-        "Bilinmeyen bir hibritin DNA dizisini ve/veya markörlerini girerek "
-        "envanterdeki hatlarla en yüksek kinship uyumunu hesaplar.",
-        icon="ℹ️"
-    )
-
-    with st.expander("📖 Yöntem Açıklaması", expanded=False):
-        st.markdown("""
-        **Toplam Güven Skoru** iki bileşenden oluşur:
-        - **Kinship (%60)** — IBS (Identity-by-State): Hibritteki markörler ebeveyn
-          havuzuyla ne kadar örtüşüyor?
-        - **DNA Benzerliği (%40)** — k-mer Jaccard benzerliği (k=8): İki dizi arasında
-          ortak 8-nükleotid alt dizisi oranı.
-
-        > ⚠️ Bu analiz probabilistik bir ön tahmindir. Kesin parentage testi için
-        > SNP çip verisi veya SSR markör paneli gereklidir.
-        """)
-
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        hibrit_id  = st.text_input("Hibrit ID", value="HYB-UNKNOWN-01")
-        hibrit_adi = st.text_input("Hibrit Adı", value="Bilinmeyen Sarı Hibrit")
-        hibrit_tur = st.selectbox("Tür",
-            ["Solanum lycopersicum","Capsicum annuum","Cucumis melo"])
-        hibrit_dna = st.text_area(
-            "DNA Dizisi (opsiyonel — FASTA veya düz nükleotid)",
-            height=100,
-            placeholder=">Hibrit_DNA\nATGGAGAGTGGAATTTCAGATTTTAAGT...",
+    with col_sol:
+        st.markdown("### 🔗 Linkage Drag Analizi")
+        gen_seçenekler = {
+            "fusarium_I"  : ("Fusarium I geni",    "fusarium_cM"),
+            "tmv_Tm2a"    : ("TMV Tm-2a geni",     "tmv_cM"),
+            "nematod_Mi12": ("Mi-1.2 (Nematod)",   "nematod_cM"),
+            "rin_gen"     : ("rin geni",            "rin_cM"),
+        }
+        gen_a_key = st.selectbox(
+            "Gen A (Hedef Gen)",
+            list(gen_seçenekler.keys()),
+            format_func=lambda x: gen_seçenekler[x][0],
+            key="risk_a",
         )
-    with col2:
-        st.markdown("**Hibrit Markör Profili**")
-        st.caption("Aşağıya hibritte tespit edilen gen ve alel bilgilerini girin.")
-        m_gen1  = st.text_input("Gen 1", value="y",     key="d_g1")
-        m_alel1 = st.selectbox("Gen 1 Alel", list(ALEL_ETIKET.values()), key="d_a1", index=0)
-        m_gen2  = st.text_input("Gen 2", value="Tm-2a", key="d_g2")
-        m_alel2 = st.selectbox("Gen 2 Alel", list(ALEL_ETIKET.values()), key="d_a2", index=1)
-        m_gen3  = st.text_input("Gen 3 (opsiyonel)", value="rin", key="d_g3")
-        m_alel3 = st.selectbox("Gen 3 Alel", list(ALEL_ETIKET.values()), key="d_a3", index=1)
-
-    if st.button("🔎 Ebeveyn Analizi Başlat", key="det_btn"):
-        # Alel seçimlerini Alel enum'una çevir
-        alel_ters = {v: k for k, v in ALEL_ETIKET.items()}
-        markorler = []
-        for gen, alel_etk in [(m_gen1, m_alel1), (m_gen2, m_alel2)]:
-            if gen:
-                markorler.append(GeneticMarker(gen, "?", alel_ters[alel_etk]))
-        if m_gen3:
-            markorler.append(GeneticMarker(m_gen3, "?", alel_ters[m_alel3]))
-
-        hibrit = BreederLine(
-            hibrit_id, hibrit_adi, hibrit_tur,
-            dna_dizisi=hibrit_dna or None,
-            markorler=markorler,
+        gen_b_key = st.selectbox(
+            "Gen B (Potansiyel Drag Geni)",
+            [k for k in gen_seçenekler if k != gen_a_key],
+            format_func=lambda x: gen_seçenekler[x][0],
+            key="risk_b",
         )
+        cm_a = st.number_input("Gen A cM Pozisyonu", 0.0, 200.0,
+                               float(df[gen_seçenekler[gen_a_key][1]].mean())
+                               if gen_seçenekler[gen_a_key][1] in df.columns else 45.0,
+                               step=0.5, key="cm_a")
+        cm_b = st.number_input("Gen B cM Pozisyonu", 0.0, 200.0,
+                               float(df[gen_seçenekler[gen_b_key][1]].mean())
+                               if gen_seçenekler[gen_b_key][1] in df.columns else 22.0,
+                               step=0.5, key="cm_b")
 
-        tür_filtreli = Inventory()
-        for h in inv.hepsi():
-            if h.tur == hibrit_tur:
-                tür_filtreli.ekle(h)
+        if st.button("⚡ Linkage Analizini Çalıştır", key="risk_btn"):
+            try:
+                sonuc = linkage_drag_analiz(cm_a, cm_b)
+                sev_renk = {"KRİTİK": "error", "YÜKSEK": "error",
+                            "ORTA": "warning", "DÜŞÜK": "success"}
+                sev_fn   = {"KRİTİK": st.error, "YÜKSEK": st.error,
+                            "ORTA": st.warning, "DÜŞÜK": st.success}
 
-        if len(tür_filtreli) < 2:
-            st.warning("Seçilen türde en az 2 hat gereklidir.", icon="⚠️")
-            return
+                sev_fn[sonuc["seviye"]](
+                    f"**Risk Seviyesi: {sonuc['seviye']}** — {sonuc['aciklama']}"
+                )
 
-        with st.spinner("Kinship ve DNA benzerlik analizi yapılıyor..."):
-            det = GeneticDetective()
-            adaylar = det.tanimlama_yap(tür_filtreli, hibrit, n=3)
+                r1, r2 = st.columns(2)
+                r1.metric("Genetik Mesafe", f"{sonuc['mesafe_cM']:.1f} cM")
+                r2.metric("Rekombinasyon p", f"{sonuc['rekomb_p']*100:.2f}%")
+                r3, r4 = st.columns(2)
+                r3.metric("Sürüklenme Riski", f"%{sonuc['surukleme_riski']}")
+                r4.metric("Gerekli Bitki (95%)", f"{sonuc['gerekli_bitki']:,}")
 
-        if not adaylar:
-            st.error("Aday ebeveyn bulunamadı.")
-            return
+                if _PLT_OK:
+                    st.plotly_chart(
+                        fig_risk_gauge(sonuc["surukleme_riski"], "Linkage Drag Riski"),
+                        use_container_width=True,
+                    )
+                # Session'a kaydet (simülasyon için)
+                st.session_state["risk_gen_a_key"] = gen_a_key
+                st.session_state["risk_gen_a_val"] = int(df[gen_a_key].max())
+                st.session_state["risk_gen_b_key"] = gen_b_key
+                st.session_state["risk_gen_b_val"] = int(df[gen_b_key].min())
 
-        st.success(f"✅ {len(adaylar)} aday ebeveyn çifti belirlendi.", icon="🔬")
+            except Exception as exc:
+                st.error(f"Linkage analiz hatası: {exc}", icon="❌")
 
-        best = adaylar[0]
-        m1, m2, m3 = st.columns(3)
-        m1.metric("En Yüksek Güven", f"%{best.toplam*100:.1f}")
-        m2.metric("Kinship Skoru", f"%{best.kinship*100:.1f}")
-        m3.metric("DNA Benzerliği", f"%{best.benzerlik_pct:.1f}")
+    with col_sag:
+        st.markdown("### ⏱️ F1 → F4 Nesil Simülasyonu")
+        sim_gen_key = st.selectbox(
+            "Simüle Edilecek Gen",
+            list(gen_seçenekler.keys()),
+            format_func=lambda x: gen_seçenekler[x][0],
+            key="sim_gen",
+        )
+        anne_val_sim = st.select_slider(
+            "Anne Genotip Değeri",
+            options=[0, 1],
+            value=1,
+            format_func=lambda x: "Dominant (1)" if x == 1 else "Resesif (0)",
+            key="anne_sim",
+        )
+        baba_val_sim = st.select_slider(
+            "Baba Genotip Değeri",
+            options=[0, 1],
+            value=0,
+            format_func=lambda x: "Dominant (1)" if x == 1 else "Resesif (0)",
+            key="baba_sim",
+        )
+        nesil_n = st.slider("Kaç Nesil Simüle Edilsin?", 2, 6, 4, key="nesil_n")
 
-        st.markdown("---")
-        for i, a in enumerate(adaylar):
-            with st.expander(
-                f"{'🥇' if i==0 else '🥈' if i==1 else '🥉'}  Aday #{i+1}  "
-                f"— {a.hat1.line_id} × {a.hat2.line_id}  "
-                f"|  Güven: %{a.toplam*100:.1f}",
-                expanded=(i==0)
-            ):
-                ac1, ac2 = st.columns(2)
-                with ac1:
-                    st.markdown(f"**Hat-1:** `{a.hat1.line_id}` — {a.hat1.adi}")
-                    st.markdown(f"**Hat-2:** `{a.hat2.line_id}` — {a.hat2.adi}")
-                with ac2:
-                    st.metric("Kinship", f"%{a.kinship*100:.1f}")
-                    st.metric("DNA Benzerliği", f"%{a.benzerlik_pct:.1f}")
-                if a.toplam >= 0.6:
-                    st.success(a.aciklama, icon="🟢")
-                elif a.toplam >= 0.4:
-                    st.warning(a.aciklama, icon="🟡")
+        if st.button("▶️ Simülasyonu Başlat", key="sim_btn"):
+            try:
+                df_sim = f_nesil_sim(anne_val_sim, baba_val_sim, nesil_n)
+                if _PLT_OK:
+                    gen_adi = gen_seçenekler[sim_gen_key][0]
+                    st.plotly_chart(fig_f_nesil(df_sim, gen_adi), use_container_width=True)
+
+                st.dataframe(df_sim, use_container_width=True)
+
+                # Yorum
+                son_nesil = df_sim.iloc[-1]
+                if son_nesil["Homozigot Oran (%)"] >= 90:
+                    st.success(
+                        f"✅ F{nesil_n} itibarıyla homozigotluk **%{son_nesil['Homozigot Oran (%)']:.1f}**'e ulaştı. "
+                        f"Hat, bu nesilde ticari kullanıma hazır sayılabilir.",
+                        icon="✅"
+                    )
+                elif son_nesil["Homozigot Oran (%)"] >= 60:
+                    st.warning(
+                        f"⚠️ F{nesil_n} sonunda homozigotluk **%{son_nesil['Homozigot Oran (%)']:.1f}**. "
+                        f"Daha fazla nesil veya markör destekli seçim (MAS) önerilir.",
+                        icon="⚠️"
+                    )
                 else:
-                    st.info(a.aciklama, icon="🔵")
+                    st.error(
+                        f"❌ F{nesil_n} sonunda homozigotluk hâlâ **%{son_nesil['Homozigot Oran (%)']:.1f}**. "
+                        f"Backcross stratejisi veya piramitleme gerekli.",
+                        icon="❌"
+                    )
+
+            except Exception as exc:
+                st.error(f"Simülasyon hatası: {exc}", icon="❌")
 
 
-def page_proteomic(inv: Inventory):
-    st.markdown("## 🧪 Proteomic Insights — Evrensel Proteomik Yorumlayıcı")
-    st.info(
-        "DNA dizisini amino asite çevirir, bilinen protein motiflerini tarar "
-        "ve tarladaki beklenen etkiyi yorumlar. "
-        "Veritabanında tanımlı olmayan diziler için sıfır-bilgi analizi yapar.",
-        icon="ℹ️"
+# ── §8.3  Genetic Map ─────────────────────────────────────────────────────────
+
+def sekme_genetic_map(df: pd.DataFrame) -> None:
+    st.markdown("## 🗺️ Genetic Map — Dinamik Genetik Harita")
+    st.markdown(
+        "Veri setindeki genlerin kromozom üzerindeki **cM konumlarını** interaktif "
+        "olarak görselleştirir. Tehlikeli yakınlıkları (linkage drag riski) "
+        "kırmızı bölge ile vurgular."
     )
 
-    with st.expander("📖 Analiz Süreci", expanded=False):
+    with st.expander("ℹ️ Harita Hakkında", expanded=False):
         st.markdown("""
-        1. **DNA Temizleme** — FASTA başlıkları, boşluklar, geçersiz karakterler kaldırılır.
-        2. **3-Çerçeve Çevirisi** — Her üç okuma çerçevesi denenir; en uzun ORF seçilir.
-        3. **Motif Taraması** — 8 bilinen protein motifi (regex) ile amino asit dizisi taranır.
-        4. **Protein Sınıfı Tayini** — Bulunan motiflere göre hiyerarşik sınıflandırma.
-        5. **Tarla Etkisi Yorumu** — Tespit edilen protein sınıfının beklenen fenotipik etkisi.
-
-        > ⚠️ Bu analiz örüntü eşleşmesi tabanlıdır. Kesin sonuç için AlphaFold /
-        > InterPro / Pfam kullanılması önerilir.
+        - **X ekseni:** centiMorgan (cM) — 0 = sentromer
+        - **Yatay çizgiler:** Farklı kromozom grupları
+        - **Kırmızı bölge:** <10 cM → Yüksek linkage drag riski
+        - **Semboller:** Gen pozisyonunu taşıyan hat ortalaması
+        - Her renk farklı bir bitki türünü temsil eder
         """)
 
-    # Demo dizisi seç veya elle gir
-    demo_dizi = (
-        "ATGGGCGTTGGCAAAACTACCATGCTTGCAGCTGATTTGCGTCAGAAGATGGCTGCAGAGCTGAAAGAT"
-        "CGCTTTGCGATGGTGGATGGCGTGGGCGAAGTGGACTCTTTTGGCGACTTCCTCAAAACACTCGCAGAG"
-        "GAGATCATTGGCGTCGTCAAAGATAGTAAACTCTATTTGTTGCTTCTTTTAAGTGGCAGGACTTGGCAT"
-        "GTTGGGCGGCGTACTTGGCATTTCAATGGGCGGACAAGAAGTTCCTCATACCGAGAGAGAGTGGGCGTT"
-        "GGCAAAACTACCGTATGGGCGGCAAGAAGTTCCTTGAGGGGGTGGCAAAACCATGGCTGGCAGACTTGC"
+    if not _PLT_OK:
+        st.error("Plotly kurulu değil. pip install plotly", icon="❌")
+        return
+
+    try:
+        gerekli = ["fusarium_cM", "tmv_cM", "nematod_cM", "rin_cM"]
+        eksik   = [k for k in gerekli if k not in df.columns]
+        if eksik:
+            st.warning(f"cM sütunları eksik: {eksik}. Demo verisi ile gösteriliyor.", icon="⚠️")
+            df_harita = demo_veri()
+        else:
+            df_harita = df
+
+        st.plotly_chart(fig_genetik_harita(df_harita), use_container_width=True)
+
+        # Yakın gen uyarıları
+        st.markdown("### ⚠️ Kritik Yakınlık Uyarıları")
+        gen_cM_ort = {
+            "Fusarium I"   : df_harita["fusarium_cM"].mean() if "fusarium_cM" in df_harita else 45,
+            "TMV Tm-2a"    : df_harita["tmv_cM"].mean()      if "tmv_cM"      in df_harita else 22,
+            "Mi-1.2"       : df_harita["nematod_cM"].mean()  if "nematod_cM"  in df_harita else 33,
+            "rin"          : df_harita["rin_cM"].mean()       if "rin_cM"      in df_harita else 12,
+        }
+        uyari_sayisi = 0
+        for (ga, va), (gb, vb) in itertools.combinations(gen_cM_ort.items(), 2):
+            mesafe = abs(va - vb)
+            if mesafe < 20:
+                renk = "🔴" if mesafe < 10 else "🟡"
+                st.warning(
+                    f"{renk} **{ga}** ↔ **{gb}**: {mesafe:.1f} cM — "
+                    f"{'KRİTİK linkage drag riski!' if mesafe < 10 else 'Orta risk — takip edin.'}",
+                    icon="⚠️"
+                )
+                uyari_sayisi += 1
+
+        if uyari_sayisi == 0:
+            st.success("✅ Analiz edilen gen çiftleri arasında kritik yakınlık tespit edilmedi.", icon="✅")
+
+        # Tablo
+        st.markdown("### 📐 Gen Konumları Tablosu")
+        tablo_verisi = [
+            {"Gen": g, "Ortalama cM": round(v, 1),
+             "Risk (<10 cM)": "⚠️ Evet" if any(abs(v-v2) < 10 for g2, v2 in gen_cM_ort.items() if g2 != g) else "✅ Hayır"}
+            for g, v in gen_cM_ort.items()
+        ]
+        st.dataframe(pd.DataFrame(tablo_verisi), use_container_width=True)
+
+    except Exception as exc:
+        st.error(f"Genetik harita hatası: {exc}", icon="❌")
+        st.code(traceback.format_exc())
+
+
+# ── §8.4  Proteomic Insights ──────────────────────────────────────────────────
+
+def sekme_proteomik(df: pd.DataFrame) -> None:
+    st.markdown("## 🧪 Proteomic Insights — Protein Analizi & Akıllı Tahmin")
+    st.markdown(
+        "DNA dizisini amino aside çevirir, **15 ticari/bilimsel motif** ile tarar. "
+        "Eşleşme bulunamazsa hidrofobiklik ve lösin analizi ile **akıllı tahmin** üretir."
     )
 
-    col_opt, col_inv = st.columns([2, 1])
-    with col_opt:
-        kaynak = st.radio("DNA Kaynağı", ["Demo Dizi (NBS-LRR)", "Envanterdeki Hat", "Elle Gir"],
-                          horizontal=True)
-    with col_inv:
-        secili_hat = None
-        if kaynak == "Envanterdeki Hat":
-            secili_hat = st.selectbox("Hat Seç",
-                [h.line_id for h in inv.hepsi() if h.dna_dizisi])
+    col1, col2 = st.columns([3, 2])
 
-    if kaynak == "Demo Dizi (NBS-LRR)":
-        dna_input = demo_dizi
-        st.code(dna_input[:120] + "...", language="text")
-    elif kaynak == "Envanterdeki Hat" and secili_hat:
-        hat = inv.getir(secili_hat)
-        dna_input = hat.dna_dizisi or ""
-        st.code((dna_input[:120] + "...") if dna_input else "DNA yok", language="text")
-    else:
-        dna_input = st.text_area(
-            "DNA Dizisi (FASTA veya düz nükleotid)",
-            height=160,
-            placeholder=">Bilinmeyen_Gen\nATGGGCGTTGGCAAAACTACC...",
+    with col1:
+        kaynak = st.radio(
+            "DNA Kaynağı",
+            ["Demo Dizi (NBS-LRR)", "Elle Gir"],
+            horizontal=True,
         )
+        if kaynak == "Demo Dizi (NBS-LRR)":
+            dna_input = DEMO_DNA
+            st.code(DEMO_DNA[:100] + "...", language="text")
+        else:
+            dna_input = st.text_area(
+                "DNA Dizisi (FASTA veya düz nükleotid)",
+                height=140,
+                placeholder=">Bilinmeyen_Gen\nATGGGCGTTGGCAAAACTACCATGCTTGCAGCT...",
+            )
+
+    with col2:
+        st.markdown("**⚙️ Analiz Ayarları**")
+        leucine_esik    = st.slider("Lösin Eşiği (%)",    1, 20, 8,  key="leu_thr")
+        hidrofob_esik   = st.slider("Hidrofobiklik Eşiği (%)", 10, 60, 35, key="hyd_thr")
+        min_uzunluk     = st.number_input("Minimum AA Uzunluğu", 10, 500, 20, step=5)
 
     if st.button("🔬 Proteomik Analizi Başlat", key="prot_btn"):
         if not dna_input or len(dna_input.strip()) < 30:
             st.error("Lütfen en az 30 nükleotid içeren bir dizi girin.", icon="❌")
             return
+        try:
+            with st.spinner("DNA çevirisi ve motif taraması yapılıyor..."):
+                aa = biopython_cevir(dna_input)
 
-        with st.spinner("DNA çevirisi ve motif taraması yapılıyor..."):
-            prot = ProteomikYorumlayici()
-            sonuc = prot.analiz_et(dna_input)
+            if not aa or len(aa) < min_uzunluk:
+                st.error(
+                    f"Çeviri sonucu çok kısa ({len(aa)} AA). "
+                    f"DNA dizisi veya minimum uzunluk eşiğini kontrol edin.",
+                    icon="❌"
+                )
+                return
 
-        # KPI satırı
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("DNA Uzunluğu", f"{sonuc.dna_uzunluk} bp")
-        m2.metric("AA Uzunluğu", f"{sonuc.aa_uzunluk} aa")
-        m3.metric("Bulunan Motif", len(sonuc.motifler))
-        guven_kisa = sonuc.guven.split(" ")[0]
-        m4.metric("Güven", guven_kisa)
+            motifler = motif_tara(aa)
+            h_anal   = hidrofobik_analiz(aa)
 
-        st.markdown("---")
+            # KPI satırı
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("DNA Uzunluğu",    f"{len(dna_input.replace(chr(10),''))} bp")
+            m2.metric("AA Uzunluğu",     f"{len(aa)} aa")
+            m3.metric("Bulunan Motif",   f"{len(motifler)}")
+            m4.metric("Lösin (%)",       f"{h_anal.get('leucine_pct','?')}")
 
-        # Protein sınıfı
-        st.markdown(f"### 🏷️ Protein Sınıfı: `{sonuc.protein_sinifi}`")
-        st.markdown(f"**Biyolojik İşlev:** {sonuc.fonksiyon}")
-        st.success(f"🌾 Tarla Etkisi: {sonuc.tarla_etkisi}", icon="🌿")
+            st.markdown("---")
+            col_a, col_b = st.columns(2)
 
-        # AA dizisi
-        with st.expander("🔤 Amino Asit Dizisi (ilk 80)", expanded=False):
-            st.code(sonuc.aa_dizisi, language="text")
+            with col_a:
+                # Amino asit dizisi
+                st.markdown("#### 🔤 Amino Asit Dizisi")
+                st.code(aa if len(aa) <= 200 else aa[:200] + "...", language="text")
 
-        st.markdown("---")
-        st.markdown("### 🔬 Bulunan Protein Motifleri")
-        if sonuc.motifler:
-            for m in sonuc.motifler:
-                pozisyonlar = ", ".join(str(k) for k in m.get("konumlar",[]))
-                with st.expander(f"**{m['isim']}** — `{m['motif']}`  |  {m['kategori']}"):
-                    mc1, mc2 = st.columns(2)
-                    with mc1:
-                        st.markdown(f"**Kategori:** {m['kategori']}")
-                        st.markdown(f"**Motif Pattern:** `{m['motif']}`")
-                        st.markdown(f"**Konum(lar):** {pozisyonlar}")
-                    with mc2:
-                        st.markdown(f"**Biyolojik İşlev:** {m['islev']}")
-                        st.info(f"🌾 Tarla Etkisi: {m['tarla']}", icon="🌾")
-        else:
-            st.warning("Bilinen motif bulunamadı. AlphaFold veya InterPro analizi önerilir.", icon="⚠️")
+                # Hidrofobik analiz
+                st.markdown("#### 💧 Hidrofobik Analiz")
+                hd1, hd2 = st.columns(2)
+                hd1.metric("Hidrofobiklik", f"%{h_anal.get('hidrofob_pct','?')}")
+                hd2.metric("Lösin (L)",     f"%{h_anal.get('leucine_pct','?')}")
 
-        st.caption(f"⚠️ Güven Notu: {sonuc.guven}")
+                # Eşik karşılaştırması
+                if h_anal.get("leucine_pct", 0) >= leucine_esik:
+                    st.success(f"✅ Lösin eşiği aşıldı: %{h_anal['leucine_pct']} ≥ %{leucine_esik}", icon="✅")
+                else:
+                    st.info(f"ℹ️ Lösin: %{h_anal.get('leucine_pct','?')} < %{leucine_esik} eşiği", icon="ℹ️")
+
+                if h_anal.get("hidrofob_pct", 0) >= hidrofob_esik:
+                    st.success(f"✅ Hidrofobiklik eşiği aşıldı: %{h_anal['hidrofob_pct']} ≥ %{hidrofob_esik}", icon="✅")
+                else:
+                    st.info(f"ℹ️ Hidrofobiklik: %{h_anal.get('hidrofob_pct','?')} < %{hidrofob_esik} eşiği", icon="ℹ️")
+
+            with col_b:
+                # Protein sınıflandırma
+                st.markdown("#### 🏷️ Protein Sınıfı")
+                if motifler:
+                    sinif_sayim: Dict[str, int] = {}
+                    for m in motifler:
+                        sinif_sayim[m["sinif"]] = sinif_sayim.get(m["sinif"], 0) + 1
+                    dominant_sinif = max(sinif_sayim, key=sinif_sayim.get)
+                    st.success(f"**{dominant_sinif}**", icon="🔬")
+
+                    for sinif, sayi in sinif_sayim.items():
+                        st.markdown(
+                            f'<span class="badge-green">{sinif}</span> '
+                            f'<span class="badge-gold">{sayi} eşleşme</span>',
+                            unsafe_allow_html=True,
+                        )
+                        st.markdown("")
+                else:
+                    st.warning("Bilinen motif bulunamadı.", icon="⚠️")
+
+                # Akıllı tahmin (özelleştirilmiş eşiklerle)
+                tahmin = None
+                if not motifler and len(aa) >= 20:
+                    l_pct = h_anal.get("leucine_pct", 0)
+                    h_pct = h_anal.get("hidrofob_pct", 0)
+                    if l_pct >= leucine_esik and h_pct >= hidrofob_esik:
+                        tahmin = (
+                            f"Tam motif eşleşmesi bulunamadı. Ancak bu proteindeki "
+                            f"**%{h_pct} hidrofobik amino asit** oranı ve "
+                            f"**%{l_pct} lösin (L)** yüzdesi yüksek bulundu. "
+                            f"Bu bileşim, NBS-LRR veya LRR tekrar bölgelerine sahip "
+                            f"**R-Gen (Direnç) proteini** yapısına benzemektedir. "
+                            f"Kesin sonuç için AlphaFold / InterPro analizi önerilir."
+                        )
+                    elif h_pct >= 45:
+                        tahmin = (
+                            f"Tam motif eşleşmesi bulunamadı. Yüksek hidrofobiklik "
+                            f"(**%{h_pct}**) bu dizinin bir membran proteini veya "
+                            f"taşıyıcı protein olduğuna işaret edebilir."
+                        )
+
+                if tahmin:
+                    st.markdown("#### 🤖 Akıllı Tahmin")
+                    st.info(tahmin, icon="🤖")
+
+            st.markdown("---")
+
+            # Motif detayları
+            if motifler:
+                st.markdown("### 🔬 Tespit Edilen Motifler")
+                if _PLT_OK:
+                    bar_fig = fig_proteomic_bar(motifler)
+                    if bar_fig:
+                        st.plotly_chart(bar_fig, use_container_width=True)
+
+                for m in motifler:
+                    pozisyonlar = ", ".join(str(k) for k in m.get("konumlar", []))
+                    with st.expander(
+                        f"**{m['isim']}** — `{m['motif']}` | {m['sinif']} | {m['adet']}×",
+                        expanded=False,
+                    ):
+                        mc1, mc2 = st.columns(2)
+                        with mc1:
+                            st.markdown(f"**Sınıf:** {m['sinif']}")
+                            st.markdown(f"**Motif:** `{m['motif']}`")
+                            st.markdown(f"**Konum(lar):** {pozisyonlar}")
+                            st.markdown(f"**Eşleşme Sayısı:** {m['adet']}")
+                        with mc2:
+                            st.markdown(f"**Biyolojik İşlev:** {m['islev']}")
+                            st.success(f"🌾 **Tarla Etkisi:** {m['tarla']}", icon="🌿")
+            else:
+                if not tahmin:
+                    st.info(
+                        "Bu dizi için bilinen motif bulunamadı ve akıllı tahmin eşikleri "
+                        "de karşılanmadı. Dizi yapısal bir protein veya bilinmeyen işlevli "
+                        "bir gen ürünü olabilir. AlphaFold / InterPro analizi önerilir.",
+                        icon="ℹ️"
+                    )
+
+        except Exception as exc:
+            st.error(f"Proteomik analiz hatası: {exc}", icon="❌")
+            st.code(traceback.format_exc())
 
 
-# ─────────────────────────────────────────────────────────────────────
-# §7  SIDEBAR & ROUTER
-# ─────────────────────────────────────────────────────────────────────
+# ── §8.5  Genetic Detective ───────────────────────────────────────────────────
 
-def sidebar():
-    with st.sidebar:
+def sekme_detective(df: pd.DataFrame) -> None:
+    st.markdown("## 🕵️ Genetic Detective — Akrabalık & Benzerlik Analizi")
+    st.markdown(
+        "Envanterdeki hatların genetik özellik profillerinden "
+        "**Jaccard benzerlik matrisi** hesaplar ve interaktif ısı haritası çizer. "
+        "Yüksek benzerlik = Yüksek akrabalık → Genetik daralma riski."
+    )
+
+    with st.expander("📖 Metodoloji", expanded=False):
         st.markdown("""
-        <div style="text-align:center;padding:1.2rem 0 0.5rem">
-            <div style="font-size:2.2rem">🧬</div>
-            <div style="color:#00ffaa;font-weight:800;font-size:1.15rem;letter-spacing:1px">
-                BIOVALENT
-            </div>
-            <div style="color:#4a6a8a;font-size:0.72rem;letter-spacing:2px;margin-top:2px">
-                SENTINEL v9.0
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        **Jaccard Benzerliği:** `|A ∩ B| / |A ∪ B|`
 
-        st.markdown("---")
+        Her hat için ikili özellik seti oluşturulur:
+        - Genetik markörler (fusarium_I, tmv_Tm2a, nematod_Mi12, rin_gen, pto_gen)
+        - Fenotipik etiketler (etiketler sütunundan ayrıştırılır)
 
-        sayfa = st.radio(
-            "Navigasyon",
-            options=[
-                "🏠 Dashboard",
-                "🧬 Matchmaker",
-                "⚠️ Risk Engine",
-                "🔍 Genetic Detective",
-                "🧪 Proteomic Insights",
-            ],
-            label_visibility="collapsed",
+        **Renk Yorumu:**
+        - 🟢 Koyu Yeşil → Yüksek benzerlik (akraba hatlar)
+        - ⬛ Koyu → Düşük benzerlik (genetik çeşitlilik var)
+
+        Köşegen (her hattın kendisiyle karşılaştırması) her zaman 1.0'dır.
+        """)
+
+    if not _PLT_OK:
+        st.error("Plotly kurulu değil. pip install plotly", icon="❌")
+        return
+
+    col_filtre, col_ayar = st.columns(2)
+    with col_filtre:
+        tür_f = st.selectbox(
+            "Tür Filtresi (Isı haritası için)",
+            ["Tümü"] + sorted(df["tur"].unique().tolist()) if "tur" in df.columns else ["Tümü"],
+            key="det_tur",
         )
+    with col_ayar:
+        esik = st.slider("Akrabalık Uyarı Eşiği", 0.30, 0.90, 0.65, step=0.05, key="det_esik")
 
-        st.markdown("---")
-        st.markdown("""
-        <div style="color:#4a6a8a;font-size:0.75rem;line-height:1.6">
-            <b style="color:#7de8c5">Bilimsel Referanslar</b><br>
-            Jones et al. (1993) — Fusarium <i>I</i> geni<br>
-            Pelham (1966) — TMV <i>Tm-2a</i><br>
-            Martin et al. (1993) — <i>Pto</i> kinaz<br>
-            Giovannoni (2004) — <i>rin</i> geni<br>
-            Rossi et al. (1998) — <i>Mi-1.2</i>
-        </div>
-        """, unsafe_allow_html=True)
+    if st.button("🔥 Akrabalık Analizini Başlat", key="det_btn"):
+        try:
+            df_f = df if tür_f == "Tümü" else df[df["tur"] == tür_f]
+            if len(df_f) < 2:
+                st.warning("Isı haritası için en az 2 hat gereklidir.", icon="⚠️")
+                return
 
-        st.markdown("---")
-        st.markdown("""
-        <div style="color:#4a6a8a;font-size:0.72rem;text-align:center">
-            © 2025 Biovalent · Decoding the Bonds of Life<br>
-            <span style="color:#1e4d7b">SaaS Platformu · Kurumsal Lisans</span>
-        </div>
-        """, unsafe_allow_html=True)
+            with st.spinner("Jaccard benzerlik matrisi hesaplanıyor..."):
+                mat = akrabalik_matrisi(df_f)
 
-    return sayfa
+            # KPI
+            np_mat = mat.values.copy()
+            np.fill_diagonal(np_mat, np.nan)
+            ortalama_benzerlik = float(np.nanmean(np_mat))
+            max_benzerlik      = float(np.nanmax(np_mat))
+
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Ortalama Benzerlik",   f"{ortalama_benzerlik:.3f}")
+            m2.metric("Maksimum Benzerlik",   f"{max_benzerlik:.3f}")
+            m3.metric("Hat Sayısı (Analiz)",  len(df_f))
+
+            # Isı haritası
+            st.plotly_chart(fig_heatmap(mat), use_container_width=True)
+
+            # Yüksek akrabalık uyarıları
+            st.markdown(f"### ⚠️ Yüksek Akrabalık Uyarıları (>{esik:.2f})")
+            uyari_listesi = []
+            ids = mat.index.tolist()
+            for i in range(len(ids)):
+                for j in range(i + 1, len(ids)):
+                    val = mat.iloc[i, j]
+                    if val >= esik:
+                        uyari_listesi.append({
+                            "Hat-1": ids[i],
+                            "Hat-2": ids[j],
+                            "Benzerlik": round(val, 4),
+                            "Risk": "🔴 Yüksek" if val >= 0.80 else "🟡 Orta",
+                        })
+
+            if uyari_listesi:
+                uyari_df = pd.DataFrame(uyari_listesi).sort_values(
+                    "Benzerlik", ascending=False
+                ).reset_index(drop=True)
+                uyari_df.index += 1
+                st.dataframe(
+                    uyari_df.style.background_gradient(
+                        subset=["Benzerlik"], cmap="RdYlGn_r"
+                    ),
+                    use_container_width=True,
+                )
+                st.warning(
+                    f"⚠️ {len(uyari_listesi)} yüksek akrabalık çifti tespit edildi. "
+                    f"Bu hatları aynı çaprazlamada kullanmaktan kaçının "
+                    f"(genetik daralma riski).",
+                    icon="⚠️"
+                )
+            else:
+                st.success(
+                    f"✅ {esik:.2f} eşiğinin üzerinde akrabalık tespit edilmedi. "
+                    f"Envanteriniz genetik çeşitlilik açısından sağlıklı görünüyor.",
+                    icon="✅"
+                )
+
+            # Tam matris tablosu
+            with st.expander("📊 Tam Benzerlik Matrisi", expanded=False):
+                st.dataframe(
+                    mat.style.background_gradient(cmap="Greens").format("{:.3f}"),
+                    use_container_width=True,
+                )
+
+        except Exception as exc:
+            st.error(f"Akrabalık analizi hatası: {exc}", icon="❌")
+            st.code(traceback.format_exc())
 
 
-def main():
-    inv   = demo_envanter()
-    sayfa = sidebar()
+# ─────────────────────────────────────────────────────────────────────────────
+# §9  DASHBOARD (Ana Sayfa)
+# ─────────────────────────────────────────────────────────────────────────────
 
-    if "Dashboard" in sayfa:
-        page_dashboard(inv)
-    elif "Matchmaker" in sayfa:
-        page_matchmaker(inv)
-    elif "Risk Engine" in sayfa:
-        page_risk_engine(inv)
-    elif "Detective" in sayfa:
-        page_detective(inv)
-    elif "Proteomic" in sayfa:
-        page_proteomic(inv)
+def dashboard_hero(df: pd.DataFrame) -> None:
+    """Uygulama ana ekranının üst kısmı."""
+    st.markdown(f"""
+    <div class="bv-hero">
+      <div style="font-size:2.8rem;margin-bottom:0.3rem">🧬</div>
+      <h1 style="margin:0;font-size:2.4rem">Biovalent Sentinel</h1>
+      <p style="color:{PAL['gold']};font-size:1.05rem;margin:0.2rem 0 0.5rem;
+                letter-spacing:1.5px;font-weight:600">
+        DECODING THE BONDS OF LIFE
+      </p>
+      <p style="color:{PAL['grey_mid']};font-size:0.82rem;margin:0">
+        v{VER} · Tarımsal Biyoteknoloji & Genetik Karar Destek SaaS Platformu
+      </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Envanter KPI'ları
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("🌱 Hat Sayısı",       len(df))
+    c2.metric("🔬 Tür Sayısı",       df["tur"].nunique() if "tur" in df.columns else "—")
+    if "verim_t_ha" in df.columns:
+        c3.metric("📦 Ort. Verim (t/ha)", f"{df['verim_t_ha'].mean():.1f}")
+    if "raf_omru_gun" in df.columns:
+        c4.metric("🗓️ Ort. Raf Ömrü",     f"{df['raf_omru_gun'].mean():.0f} gün")
+    if "brix" in df.columns:
+        c5.metric("🍬 Ort. Brix",          f"{df['brix'].mean():.1f}°")
 
 
-# ─────────────────────────────────────────────────────────────────────
-# §8  GİRİŞ NOKTASI
-# ─────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# §10  ANA FONKSİYON
+# ─────────────────────────────────────────────────────────────────────────────
+
+def main() -> None:
+    # Sidebar ve veri
+    df = sidebar_render()
+
+    # Hero banner
+    dashboard_hero(df)
+
+    st.markdown("---")
+
+    # Ana sekmeler
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "🧬 Matchmaker",
+        "⚠️ Risk Engine",
+        "🗺️ Genetic Map",
+        "🧪 Proteomic Insights",
+        "🕵️ Genetic Detective",
+    ])
+
+    with tab1:
+        try:
+            sekme_matchmaker(df)
+        except Exception as exc:
+            st.error(f"Matchmaker modül hatası: {exc}", icon="❌")
+
+    with tab2:
+        try:
+            sekme_risk(df)
+        except Exception as exc:
+            st.error(f"Risk Engine modül hatası: {exc}", icon="❌")
+
+    with tab3:
+        try:
+            sekme_genetic_map(df)
+        except Exception as exc:
+            st.error(f"Genetic Map modül hatası: {exc}", icon="❌")
+
+    with tab4:
+        try:
+            sekme_proteomik(df)
+        except Exception as exc:
+            st.error(f"Proteomik modül hatası: {exc}", icon="❌")
+
+    with tab5:
+        try:
+            sekme_detective(df)
+        except Exception as exc:
+            st.error(f"Genetic Detective modül hatası: {exc}", icon="❌")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# §11  GİRİŞ NOKTASI
+# ─────────────────────────────────────────────────────────────────────────────
+
 if __name__ == "__main__":
     main()
