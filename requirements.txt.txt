@@ -1,4 +1,8 @@
 streamlit
-matplotlib
+pandas
 numpy
 biopython
+plotly
+requests
+openpyxl
+py3Dmol
