@@ -6,10 +6,3 @@ plotly
 requests
 openpyxl
 py3Dmol
-streamlit
-pandas
-numpy
-biopython
-plotly
-requests
-openpyxl
