@@ -1675,7 +1675,7 @@ def sidebar_yukle() -> pd.DataFrame:
         st.markdown(
             f"- NCBI Entrez: {'<span class=\"tag-green\">Aktif</span>' if _BIO_OK else '<span class=\"tag-red\">⚠ Biopython Eksik</span>'}\n"
             f"- ESMFold: <span class='tag-blue'>İstek Bazlı</span>\n"
-            f"- Heuristic Modu: <span class='tag-green'>Hazır</span>",
+             "- Heuristic Modu: <span class='tag-green'>Hazır</span>",
             unsafe_allow_html=True,
         )
         if not _BIO_OK:
