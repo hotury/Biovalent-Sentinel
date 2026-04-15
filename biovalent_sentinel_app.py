@@ -832,12 +832,12 @@ def esmfold_katla(aa_dizi: str, timeout: int = 60) -> Tuple[Optional[str], str]:
                 f"ESMFold API yanıt kodu: {resp.status_code}. "
                 "Sunucu meşgul olabilir — birkaç dakika sonra tekrar deneyin."
             )
-    except requests.Timeout:
+    except requests.exceptions.Timeout:
         return None, (
             f"ESMFold API {timeout} saniyede yanıt vermedi. "
             "Daha kısa bir dizi deneyin (<200 AA) veya daha sonra tekrar deneyin."
         )
-    except requests.ConnectionError:
+    except requests.exceptions.ConnectionError:
         return None, (
             "ESMFold sunucusuna bağlanılamadı. "
             "İnternet bağlantınızı veya sunucu durumunu kontrol edin: "
@@ -1675,7 +1675,7 @@ def sidebar_yukle() -> pd.DataFrame:
         st.markdown(
             f"- NCBI Entrez: {'<span class=\"tag-green\">Aktif</span>' if _BIO_OK else '<span class=\"tag-red\">⚠ Biopython Eksik</span>'}\n"
             f"- ESMFold: <span class='tag-blue'>İstek Bazlı</span>\n"
-            "- Heuristic Modu: <span class='tag-green'>Hazır</span>",
+            f"- Heuristic Modu: <span class='tag-green'>Hazır</span>",
             unsafe_allow_html=True,
         )
         if not _BIO_OK:
