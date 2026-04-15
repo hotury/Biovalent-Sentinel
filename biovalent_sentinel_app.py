@@ -1672,8 +1672,10 @@ def sidebar_yukle() -> pd.DataFrame:
 
         # ── API durumu ────────────────────────────────────────────────────
         st.markdown("**🌐 API Durumu**")
+        ncbi_durum = "<span class='tag-green'>Aktif</span>" if _BIO_OK else "<span class='tag-red'>⚠ Biopython Eksik</span>"
+        
         st.markdown(
-            f"- NCBI Entrez: {'<span class=\"tag-green\">Aktif</span>' if _BIO_OK else '<span class=\"tag-red\">⚠ Biopython Eksik</span>'}\n"
+            f"- NCBI Entrez: {ncbi_durum}\n"
             f"- ESMFold: <span class='tag-blue'>İstek Bazlı</span>\n"
             f"- Heuristic Modu: <span class='tag-green'>Hazır</span>",
             unsafe_allow_html=True,
