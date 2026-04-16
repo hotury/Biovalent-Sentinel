@@ -1141,16 +1141,16 @@ def nesil_kaybi_tahmini(
 ) -> pd.DataFrame:
     """
     Islah programında hedef genotipin sabitlenmesi için gereken nesil sayısını tahmin eder.
-    Selfing (kendi kendine tozlama) varsayımı altında her nesilde heterozigot oran yarıya iner.
-
+    
     Parametreler:
         hedef_gen_sayisi  : Sabitlenecek gen sayısı
         baslangic_frekans : F1'deki başlangıç dominant frekansı
         min_frekans       : Hedeflenen minimum sabitlenme oranı
         max_nesil         : Maksimum nesil sayısı
-
-    Döner: DataFrame [Nesil, Homozigot_Oran, Seçim_Havuzu, Tavsiye]
     """
+    # Fonksiyonun devamı...
+    data = []
+    # ...
     rows: List[Dict] = []
     # ... (kodun geri kalanı buradan devam ediyor)
 
