@@ -1089,12 +1089,12 @@ def pdb_3d_html(pdb_str: str, stil: str = "cartoon", renk: str = "spectrum") -> 
 <button class="cb" onclick="setStyle('sphere')">Sphere</button>
 </div></div>
 <script>
-# 1. Şablonu tanımla (BAŞINDA 'f' HARFİ OLMADIĞINDAN EMİN OL)
-    js_taslak = """
+# 1. Metnin en başındaki 'f' harfini sildik (Burası kritik!)
+    # Python artık içindeki $ ve { } karakterlerini analiz etmeye çalışmayacak.
+    js_sablon = """
     <script>
-    // Python artık buradaki $ ve { } işaretlerine karışmayacak
     var v = $3Dmol.createViewer("viewer", {backgroundColor:"#070d07", antialias:true});
-    v.addModel(`{PDB_VERISI}`, "pdb");
+    v.addModel(`{PDB_DATA}`, "pdb");
     v.setStyle({}, {cartoon: {color: "{RENK_KODU}"}});
     v.zoomTo(); 
     v.render();
@@ -1103,10 +1103,11 @@ def pdb_3d_html(pdb_str: str, stil: str = "cartoon", renk: str = "spectrum") -> 
     function setStyle(s) { v.setStyle({}, {[s]: {color: "{RENK_KODU}"}}); v.render(); }
     </script></body></html>"""
 
-    # 2. Değişkenleri Python'un .replace() yöntemiyle güvenli bir şekilde yerleştir
-    html_final = js_taslak.replace("{PDB_VERISI}", pdb_e).replace("{RENK_KODU}", renk)
+    # 2. Değişkenleri Python'un replace yöntemiyle metne yerleştiriyoruz
+    # {PDB_DATA} ve {RENK_KODU} kısımları gerçek verilerle değişecek.
+    html_final = js_sablon.replace("{PDB_DATA}", pdb_e).replace("{RENK_KODU}", renk)
 
-    # 3. Streamlit bileşenine gönder
+    # 3. Sonucu Streamlit'e gönder
     st.components.v1.html(html_final, height=500)
 
 
