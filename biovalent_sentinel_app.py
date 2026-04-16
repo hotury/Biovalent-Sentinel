@@ -1139,21 +1139,17 @@ def nesil_kaybi_tahmini(
     min_frekans: float = 0.95,
     max_nesil: int = 10,
 ) -> pd.DataFrame:
-    """
-    Islah programında hedef genotipin sabitlenmesi için gereken nesil sayısını tahmin eder.
-    
-    Parametreler:
-        hedef_gen_sayisi  : Sabitlenecek gen sayısı
-        baslangic_frekans : F1'deki başlangıç dominant frekansı
-        min_frekans       : Hedeflenen minimum sabitlenme oranı
-        max_nesil         : Maksimum nesil sayısı
-    """
-    # Fonksiyonun devamı...
-    data = []
-    # ...
-    rows: List[Dict] = []
-    # ... (kodun geri kalanı buradan devam ediyor)
+    # Islah programında hedef genotipin sabitlenmesi için gereken nesil sayısını tahmin eder.
+    # Her nesilde (selfing) heterozigot oran yarıya iner.
+    #
+    # Parametreler:
+    # hedef_gen_sayisi  : Sabitlenecek gen sayısı
+    # baslangic_frekans : F1 deki başlangıç dominant frekansı
+    # min_frekans       : Hedeflenen minimum sabitlenme oranı
+    # max_nesil         : Maksimum nesil sayısı
 
+    rows = []
+    # Fonksiyonun devamı burada başlıyor...
     for g in range(1, max_nesil + 1):
         p_het     = 0.5 ** (g - 1)
         p_hom     = 1.0 - p_het
