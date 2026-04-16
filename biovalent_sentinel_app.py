@@ -1274,8 +1274,8 @@ def islahci_raporu_uret(
     linkage_alarmlar: Optional[List[Dict]],
 ) -> str:
     """
-    Islahçının anlayacağı dilde doğal metin raporu üretir.
-    Teknik tablo değil — aksiyona yönelik, sade Türkçe paragraflar.
+    talimat = """
+    Teknik tablo değil - aksiyona yönelik, sade Türkçe paragraflar.
     """
     ad    = hat_verisi.get("hat_adi", hat_verisi.get("hat_id","?"))
     tur   = hat_verisi.get("tur", "?")
