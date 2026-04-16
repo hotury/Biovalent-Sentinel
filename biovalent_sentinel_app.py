@@ -1089,13 +1089,17 @@ def pdb_3d_html(pdb_str: str, stil: str = "cartoon", renk: str = "spectrum") -> 
 <button class="cb" onclick="setStyle('sphere')">Sphere</button>
 </div></div>
 <script>
-var v=$3Dmol.createViewer("viewer",{{backgroundColor:"#070d07",antialias:true}});
-v.addModel(`{pdb_e}`,"pdb");
-v.setStyle({{}},{{{{"cartoon":{{"color":"{renk}"}}}}}}});
-v.zoomTo();v.render();var sp=true;v.spin(true);
-function toggleSpin(){{sp=!sp;v.spin(sp);}}
-function setStyle(s){{v.setStyle({{}},{{[s]:{{"color":"{renk}"}}}});v.render();}}
-</script></body></html>"""
+# Aşağıdaki satırın başındaki f harfine ve parantezlerin çiftlendiğine dikkat et:
+    html_code = f"""
+    <script>
+    var v = $3Dmol.createViewer("viewer", {{backgroundColor:"#070d07", antialias:true}});
+    v.addModel(`{pdb_e}`, "pdb");
+    v.setStyle({{}}, {{"cartoon": {{"color": "{renk}"}}}});
+    v.zoomTo(); v.render();
+    var sp = true; v.spin(true);
+    function toggleSpin() {{ sp = !sp; v.spin(sp); }}
+    function setStyle(s) {{ v.setStyle({{}}, {{[s]: {{"color": "{renk}"}}}}); v.render(); }}
+    </script></body></html>"""
 
 # ─────────────────────────────────────────────────────────────────────────────
 # §9  M4 — TİCARİ KARAR MOTORU v2.0
