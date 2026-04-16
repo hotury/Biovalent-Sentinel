@@ -1190,12 +1190,15 @@ def pazar_uygunluk_skoru(
     hedef_pazar   : str = "ihracat",
 ) -> Dict:
     """
-    Ticari pazar uygunluğunu çok kriterly puanlama ile değerlendirir.
-
-    Kriterler (toplam 100 puan):
-        Verim (25p) + Raf ömrü (25p) + Brix/kalite (20p) +
-        Direnç genleri (20p) + Erken hasat bonusu (10p)
-
+    # Ticari Değer Hesaplama Formülü:
+    # Toplam Puan = Dirençler (30p) + 
+    #              Verim (25p) + 
+    #              Raf ömrü (25p) + 
+    #              Brix/kalite (20p)
+    
+    # Yukarıdaki satırların başına # koyarak Python'un hata vermesini engelledik.
+    
+    skor = (direnc_puani * 0.30) + (verim_puani * 0.25) + (raf_omru * 0.25) + (brix * 0.20)
     Hedef pazar: 'ihracat' | 'yerel' | 'organik' | 'sanayi'
     """
     pazar_agirlik = {
