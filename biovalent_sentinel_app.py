@@ -1089,20 +1089,27 @@ def pdb_3d_html(pdb_str: str, stil: str = "cartoon", renk: str = "spectrum") -> 
 <button class="cb" onclick="setStyle('sphere')">Sphere</button>
 </div></div>
 <script>
-# Tırnağın başında 'f' OLMADIĞINDAN emin ol:
-    js_template = """
-    <script>
+# 1. Önce JavaScript şablonunu (BAŞINDA 'f' OLMADAN) tanımla
+js_taslak = """
+<script>
+    // Python artık bu içindeki $ ve { } işaretlerine karışmayacak
     var v = $3Dmol.createViewer("viewer", {backgroundColor:"#070d07", antialias:true});
-    v.addModel(`{PDB_DATA}`, "pdb");
-    v.setStyle({}, {cartoon: {color: "{COLOR_CODE}"}});
-    v.zoomTo(); v.render();
+    v.addModel(`{PDB_VERISI}`, "pdb");
+    v.setStyle({}, {cartoon: {color: "{RENK_KODU}"}});
+    v.zoomTo(); 
+    v.render();
     var sp = true; v.spin(true);
     function toggleSpin() { sp = !sp; v.spin(sp); }
-    function setStyle(s) { v.setStyle({}, {[s]: {color: "{COLOR_CODE}"}}); v.render(); }
-    </script></body></html>"""
+    function setStyle(s) { v.setStyle({}, {[s]: {color: "{RENK_KODU}"}}); v.render(); }
+</script>
+</body></html>
+"""
 
-    # Değişkenleri Python tarafında yerleştiriyoruz:
-    html_code = js_template.replace("{PDB_DATA}", pdb_e).replace("{COLOR_CODE}", renk)
+# 2. Değişkenleri Python'dan JavaScript'e güvenli bir şekilde gönder
+html_final = js_taslak.replace("{PDB_VERISI}", pdb_e).replace("{RENK_KODU}", renk)
+
+# 3. Sonucu Streamlit'e bas
+st.components.v1.html(html_final, height=500)
 
 
 
