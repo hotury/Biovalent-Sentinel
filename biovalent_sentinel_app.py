@@ -1133,7 +1133,6 @@ with tab3:
 # §9  M4 — TİCARİ KARAR MOTORU v2.0
 #          Linkage Drag + Nesil Kaybı Tahmini + Pazar Uygunluk Raporu
 # ─────────────────────────────────────────────────────────────────────────────
-
 def nesil_kaybi_tahmini(
     hedef_gen_sayisi: int,
     baslangic_frekans: float = 0.5,
@@ -1153,6 +1152,8 @@ def nesil_kaybi_tahmini(
     Döner: DataFrame [Nesil, Homozigot_Oran, Seçim_Havuzu, Tavsiye]
     """
     rows: List[Dict] = []
+    # ... (kodun geri kalanı buradan devam ediyor)
+
     for g in range(1, max_nesil + 1):
         p_het     = 0.5 ** (g - 1)
         p_hom     = 1.0 - p_het
