@@ -1089,26 +1089,43 @@ def pdb_3d_html(pdb_str: str, stil: str = "cartoon", renk: str = "spectrum") -> 
 <button class="cb" onclick="setStyle('sphere')">Sphere</button>
 </div></div>
 <script>
-# 1. Şablonu "DÜZ METİN" olarak tanımlıyoruz (BAŞINDA 'f' YOK)
-    # Bu sayede Python içindeki $3Dmol ve { } işaretlerini denetlemez.
-    js_taslak = """
-    <script>
-    var v = $3Dmol.createViewer("viewer", {backgroundColor:"#070d07", antialias:true});
-    v.addModel(`{PDB_VERISI}`, "pdb");
-    v.setStyle({}, {cartoon: {color: "{RENK_KODU}"}});
-    v.zoomTo(); 
-    v.render();
-    var sp = true; v.spin(true);
-    function toggleSpin() { sp = !sp; v.spin(sp); }
-    function setStyle(s) { v.setStyle({}, {[s]: {color: "{RENK_KODU}"}}); v.render(); }
-    </script></body></html>"""
-
-    # 2. Değişkenleri Python'un .replace() komutuyla güvenli bir şekilde yerleştiriyoruz
-    # Bu işlem Python'un sözdizimi (syntax) kurallarına takılmaz.
-    html_final = js_taslak.replace("{PDB_VERISI}", str(pdb_e)).replace("{RENK_KODU}", str(renk))
-
-    # 3. Sonucu Streamlit bileşeniyle ekrana basıyoruz
-    st.components.v1.html(html_final, height=500)
+with tab3:
+        st.subheader("🧪 Genom Analizi ve Protein Karakterizasyonu")
+        
+        # Eğer df boş değilse ve analiz yapılacaksa:
+        if not df.empty:
+            st.info("Genomik haritalama verileri yüklendi. 3D Protein Modeli oluşturuluyor...")
+            
+            # 1. ZIRHLI KUTU: Tırnakların ('') tam olarak burada başlayıp bittiğinden emin ol.
+            # İçinde hiçbir süslü parantez veya f harfi yok. Sadece saf metin.
+            html_taslak = '''
+            <html>
+            <head>
+                <script src="https://3Dmol.org/build/3Dmol-min.js"></script>
+            </head>
+            <body style="margin:0; padding:0;">
+                <div id="viewer" style="height: 450px; width: 100%; position: relative;"></div>
+                <script>
+                    var viewer = $3Dmol.createViewer("viewer", {backgroundColor:"#070d07", antialias:true});
+                    viewer.addModel(`__PDB_VERISI__`, "pdb");
+                    viewer.setStyle({}, {cartoon: {color: "__RENK__"}});
+                    viewer.zoomTo();
+                    viewer.render();
+                    viewer.spin(true);
+                </script>
+            </body>
+            </html>
+            '''
+            
+            # 2. GÜVENLİ DEĞİŞİM: Python değişkenlerini (pdb_e ve renk) hata riski olmadan metne gömüyoruz.
+            # (Eğer kodunda bu değişkenlerin adları farklıysa, buradaki pdb_e ve renk isimlerini kendine göre düzelt)
+            guvenli_html = html_taslak.replace("__PDB_VERISI__", str(pdb_e)).replace("__RENK__", str(renk))
+            
+            # 3. EKRANA BAS: Streamlit iframe'i içinde göster
+            st.components.v1.html(guvenli_html, height=500)
+            
+        else:
+            st.warning("Analiz için veri bulunamadı.")
 
 
 
