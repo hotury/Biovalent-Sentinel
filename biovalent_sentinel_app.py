@@ -1089,10 +1089,12 @@ def pdb_3d_html(pdb_str: str, stil: str = "cartoon", renk: str = "spectrum") -> 
 <button class="cb" onclick="setStyle('sphere')">Sphere</button>
 </div></div>
 <script>
-# 1. Şablonu tamamen ham metin (string) olarak tanımlıyoruz. 
-    # BAŞINDA 'f' OLMADIĞI İÇİN Python içeriği kontrol etmez.
-    js_taslak = """
-    <script>
+# --- 1090. SATIR CİVARI BAŞLANGIÇ ---
+
+# NOT: Metnin başında f HARFİ OLMAMALIDIR. 
+# Bu sayede JavaScript parantezleri ve $ işareti Python'u bozmaz.
+js_template = """
+<script>
     var v = $3Dmol.createViewer("viewer", {backgroundColor:"#070d07", antialias:true});
     v.addModel(`{PDB_VERISI}`, "pdb");
     v.setStyle({}, {cartoon: {color: "{RENK_KODU}"}});
@@ -1101,17 +1103,16 @@ def pdb_3d_html(pdb_str: str, stil: str = "cartoon", renk: str = "spectrum") -> 
     var sp = true; v.spin(true);
     function toggleSpin() { sp = !sp; v.spin(sp); }
     function setStyle(s) { v.setStyle({}, {[s]: {color: "{RENK_KODU}"}}); v.render(); }
-    </script></body></html>"""
+</script>
+</body></html>"""
 
-    # 2. Değişkenleri Python'un format metoduyla güvenli bir şekilde aktarıyoruz.
-    # Bu yöntem SyntaxError (Sözdizimi Hatası) riskini %0'a indirir.
-    html_final = js_taslak.format(
-        PDB_VERISI=str(pdb_e), 
-        RENK_KODU=str(renk)
-    )
+# Python değişkenlerini güvenli bir şekilde metne enjekte ediyoruz
+html_final = js_template.replace("{PDB_VERISI}", str(pdb_e)).replace("{RENK_KODU}", str(renk))
 
-    # 3. Streamlit bileşeniyle ekrana basıyoruz
-    st.components.v1.html(html_final, height=500)
+# Bileşeni ekrana basıyoruz
+st.components.v1.html(html_final, height=500)
+
+# --- BLOK SONU ---
 
 
 
