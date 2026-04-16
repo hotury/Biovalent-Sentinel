@@ -1089,17 +1089,22 @@ def pdb_3d_html(pdb_str: str, stil: str = "cartoon", renk: str = "spectrum") -> 
 <button class="cb" onclick="setStyle('sphere')">Sphere</button>
 </div></div>
 <script>
-# Aşağıdaki satırın başındaki f harfine ve parantezlerin çiftlendiğine dikkat et:
-    html_code = f"""
+# Tırnağın başında 'f' OLMADIĞINDAN emin ol:
+    js_template = """
     <script>
-    var v = $3Dmol.createViewer("viewer", {{backgroundColor:"#070d07", antialias:true}});
-    v.addModel(`{pdb_e}`, "pdb");
-    v.setStyle({{}}, {{"cartoon": {{"color": "{renk}"}}}});
+    var v = $3Dmol.createViewer("viewer", {backgroundColor:"#070d07", antialias:true});
+    v.addModel(`{PDB_DATA}`, "pdb");
+    v.setStyle({}, {cartoon: {color: "{COLOR_CODE}"}});
     v.zoomTo(); v.render();
     var sp = true; v.spin(true);
-    function toggleSpin() {{ sp = !sp; v.spin(sp); }}
-    function setStyle(s) {{ v.setStyle({{}}, {{[s]: {{"color": "{renk}"}}}}); v.render(); }}
+    function toggleSpin() { sp = !sp; v.spin(sp); }
+    function setStyle(s) { v.setStyle({}, {[s]: {color: "{COLOR_CODE}"}}); v.render(); }
     </script></body></html>"""
+
+    # Değişkenleri Python tarafında yerleştiriyoruz:
+    html_code = js_template.replace("{PDB_DATA}", pdb_e).replace("{COLOR_CODE}", renk)
+
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # §9  M4 — TİCARİ KARAR MOTORU v2.0
