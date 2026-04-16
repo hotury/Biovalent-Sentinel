@@ -1089,12 +1089,12 @@ def pdb_3d_html(pdb_str: str, stil: str = "cartoon", renk: str = "spectrum") -> 
 <button class="cb" onclick="setStyle('sphere')">Sphere</button>
 </div></div>
 <script>
-# 1. Metnin en başındaki 'f' harfini sildik (Burası kritik!)
-    # Python artık içindeki $ ve { } karakterlerini analiz etmeye çalışmayacak.
-    js_sablon = """
+# 1. Şablonu "DÜZ METİN" olarak tanımlıyoruz (Başında 'f' YOK)
+    # Bu sayede Python içindeki $3Dmol ve { } işaretlerini denetlemez.
+    js_taslak = """
     <script>
     var v = $3Dmol.createViewer("viewer", {backgroundColor:"#070d07", antialias:true});
-    v.addModel(`{PDB_DATA}`, "pdb");
+    v.addModel(`{PDB_VERISI}`, "pdb");
     v.setStyle({}, {cartoon: {color: "{RENK_KODU}"}});
     v.zoomTo(); 
     v.render();
@@ -1103,11 +1103,11 @@ def pdb_3d_html(pdb_str: str, stil: str = "cartoon", renk: str = "spectrum") -> 
     function setStyle(s) { v.setStyle({}, {[s]: {color: "{RENK_KODU}"}}); v.render(); }
     </script></body></html>"""
 
-    # 2. Değişkenleri Python'un replace yöntemiyle metne yerleştiriyoruz
-    # {PDB_DATA} ve {RENK_KODU} kısımları gerçek verilerle değişecek.
-    html_final = js_sablon.replace("{PDB_DATA}", pdb_e).replace("{RENK_KODU}", renk)
+    # 2. Değişkenleri Python'un .replace() komutuyla güvenli bir şekilde yerleştiriyoruz
+    # Bu işlem Python'un sözdizimi (syntax) kurallarına takılmaz.
+    html_final = js_taslak.replace("{PDB_VERISI}", str(pdb_e)).replace("{RENK_KODU}", str(renk))
 
-    # 3. Sonucu Streamlit'e gönder
+    # 3. Sonucu Streamlit bileşeniyle ekrana basıyoruz
     st.components.v1.html(html_final, height=500)
 
 
