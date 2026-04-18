@@ -1614,138 +1614,61 @@ def sekme_proteomik(df: pd.DataFrame) -> None:
             
             # Burada eğer yukarıda kalmış bir 'try:' satırı varsa onu sil!
             
-            if st.button("🧬 3D Yapıyı Simüle Et", use_container_width=True, key="local_3d_btn"):
+            if st.button("🧬 3D Yapıyı Simüle Et", use_container_width=True, key="
+                         # --- §16.4  3D & ANALİZ PANELLERİ ---
+        with tab_3d:
+            st.subheader("3D Protein Yapısı - Yerel Fizik Motoru")
+            st.info("Bu model, proteinin hidrofobik bölgelerine ve sarmal yapısına göre yerel olarak simüle edilir.")
+            
+            if st.button("🧬 3D Yapıyı Simüle Et", use_container_width=True, key="local_3d_engine"):
                 if aa:
-                    try: # Yeni ve temiz bir try bloğu açıyoruz
-                        with st.spinner("Protein katlanma geometrisi hesaplanıyor..."):
-                            # Fiziksel koordinatları hesapla (82. satıra eklediğimiz fonksiyon)
+                    try:
+                        with st.spinner("Katlanma geometrisi hesaplanıyor..."):
+                            # 82. satıra eklediğimiz yerel motoru çağırıyoruz
                             df_coords = yerel_3d_koordinat_olustur(aa)
                             
-                            # Plotly ile Çizim
                             fig_3d = go.Figure(data=[go.Scatter3d(
-                                x=df_coords['x'],
-                                y=df_coords['y'],
-                                z=df_coords['z'],
+                                x=df_coords['x'], y=df_coords['y'], z=df_coords['z'],
                                 mode='lines+markers',
                                 line=dict(color='#10b981', width=6),
-                                marker=dict(
-                                    size=5,
-                                    color=df_coords['z'],
-                                    colorscale='Viridis',
-                                    opacity=0.9
-                                ),
-                                text=df_coords['aa'],
-                                hoverinfo='text'
+                                marker=dict(size=4, color=df_coords['z'], colorscale='Viridis', opacity=0.8),
+                                text=df_coords['aa'], hoverinfo='text'
                             )])
                             
                             fig_3d.update_layout(
-                                height=600,
-                                margin=dict(l=0, r=0, b=0, t=0),
-                                scene=dict(
-                                    xaxis=dict(title='X (Å)', gridcolor='gray'),
-                                    yaxis=dict(title='Y (Å)', gridcolor='gray'),
-                                    zaxis=dict(title='Z (Å)', gridcolor='gray'),
-                                    bgcolor="black"
-                                ),
+                                height=600, margin=dict(l=0, r=0, b=0, t=0),
+                                scene=dict(xaxis_title='X', yaxis_title='Y', zaxis_title='Z', bgcolor="black"),
                                 template="plotly_dark"
                             )
-                            
                             st.plotly_chart(fig_3d, use_container_width=True)
-                            st.success("✅ Yerel motor ile 3D yapı başarıyla oluşturuldu.")
-                    
+                            st.success("✅ Yerel motor ile 3D model başarıyla oluşturuldu.")
                     except Exception as e:
-                        st.error(f"3D Modelleme sırasında bir hata oluştu: {str(e)}")
+                        st.error(f"Simülasyon hatası: {str(e)}")
                 else:
-                    st.warning("Analiz edilecek bir amino asit dizisi bulunamadı.")
-                
-                # Protein sinifi
-                clr = PAL["g_hi"] if yorum["ihtimal"]>70 else PAL["amber"] if yorum["ihtimal"]>45 else PAL["red"]
-                mod_txt = "Heuristic" if yorum["mod"]=="heuristic" else "Motif"
-                st.markdown(
-                    "<span style='font-size:1.1rem;font-weight:800;color:" + clr + "'>"
-                    + yorum["sinif"] + " - %" + str(yorum["ihtimal"]) + " guven"
-                    + " [" + mod_txt + "]"
-                    + "</span>",
-                    unsafe_allow_html=True,
-                )
-                if yorum["mod"] == "heuristic":
-                    st.warning(yorum["aciklama"])
+                    st.warning("Analiz edilecek amino asit dizisi bulunamadı.")
+
+        with tab_analiz:
+            st.subheader("Gelişmiş Hat Analizi")
+            # Burada mevcut analiz kodların varsa devam edebilir...
+            if 'df' in locals() and len(df) > 1:
+                st.write("### Genetik Benzerlik Isı Haritası (Jaccard)")
+                if len(df) <= 30:
+                    try:
+                        ids = df["hat_id"].tolist()
+                        # Jaccard benzerlik matrisi hesaplama
+                        mat_data = [
+                            [jaccard(ozellik_seti(df.iloc[i]), ozellik_seti(df.iloc[j])) 
+                             for j in range(len(df))] 
+                            for i in range(len(df))
+                        ]
+                        mat = pd.DataFrame(mat_data, index=ids, columns=ids)
+                        st.plotly_chart(fig_heatmap(mat), use_container_width=True)
+                    except Exception as exc:
+                        st.error("Isı haritası oluşturulurken bir hata oluştu: " + str(exc))
                 else:
-                    st.success(yorum["aciklama"])
-
-                # Tum motifler grafik
-                tum_motifler = (
-                    motif_sonuc.get("yerel",[])
-                    + motif_sonuc.get("fuzzy",[])
-                    + motif_sonuc.get("api",[])
-                )
-                if tum_motifler:
-                    fig_m = fig_motif_bar(tum_motifler)
-                    if fig_m:
-                        st.plotly_chart(fig_m, use_container_width=True)
-
-                    fuzzy_var = motif_sonuc.get("fuzzy",[])
-                    if fuzzy_var:
-                        with st.expander("Fuzzy Eslesmeler (" + str(len(fuzzy_var)) + " adet)", expanded=False):
-                            for fm in fuzzy_var:
-                                pct = int(fm.get("fuzzy_skor",0)*100)
-                                st.markdown(
-                                    "**" + fm["ad"] + "** - Skor: %" + str(pct) + " | " + fm["islev"]
-                                )
-
-                    for motif in tum_motifler[:6]:
-                        lbl = (
-                            motif.get("ad","?") + " | " +
-                            motif.get("sinif","?") + " | " +
-                            motif.get("eslesme_tipi","?")
-                        )
-                        with st.expander(lbl, expanded=False):
-                            mc1, mc2 = st.columns(2)
-                            mc1.markdown("**Konum:** " + str(motif.get("konumlar",[])))
-                            mc1.markdown("**Fuzzy Skor:** %" + str(int(motif.get("fuzzy_skor",1)*100)))
-                            mc1.markdown("**Kaynak:** " + motif.get("kaynak","?"))
-                            mc1.markdown("**Islev:** " + motif.get("islev","?"))
-                            mc2.success("Tarla: " + motif.get("tarla","?"))
-                else:
-                    st.info("Motif bulunamadi. Heuristic analiz sonuclarini inceleyin.")
-
-                with st.expander("Amino Asit Dizisi", expanded=False):
-                    st.code(aa[:300] + ("..." if len(aa)>300 else ""), language="text")
-
-                # Ikincil yapi
-                ikincil = ikincil_yapi_tahmin(aa)
-                with st.expander("Ikincil Yapi Tahmini (Yerel - Chou-Fasman)", expanded=False):
-                    ic1, ic2, ic3 = st.columns(3)
-                    ic1.metric("alfa-Heliks", "%" + str(ikincil["helix_pct"]))
-                    ic2.metric("beta-Zincir", "%" + str(ikincil["beta_pct"]))
-                    ic3.metric("Kirvimli",    "%" + str(ikincil["coil_pct"]))
-                    st.info(ikincil["yorum"])
-
-                # 3D yapi
-                if goster_3d:
-                    st.markdown("---")
-                    st.markdown("### 3D Protein Yapisi - Hibrit Zincir")
-                    st.caption("ESMFold -> AlphaFold -> Yerel Tahmin (otomatik fallback)")
-                    with st.spinner("3D katlanma yapiliyor... (30-90 sn, internet gerekli)"):
-                        sonuc_3d = hibrit_protein_analiz(aa, deneme_esmfold=True)
-                    st.info("Kaynak: " + sonuc_3d["kaynak"] + " | " + sonuc_3d["durum"][:100])
-                    if sonuc_3d["pdb"]:
-                        st.success("3D yapi basariyla olusturuldu!")
-                        try:
-                            import streamlit.components.v1 as components
-                            components.html(
-                                pdb_3d_html(sonuc_3d["pdb"], stil=mol_stil),
-                                height=510,
-                                scrolling=False,
-                            )
-                        except Exception as exc:
-                            st.warning("Gorsellestirici yuklenemedi: " + str(exc))
-                    else:
-                        st.warning(
-                            "3D yapi olusturulamadi. Ikincil Yapi tahmini kullanilabilir. "
-                            "Sebep: " + sonuc_3d["durum"][:150]
-                        )
-
+                    st.info("Isı haritası performansı korumak için en fazla 30 hat ile çalışır.")
+            else:
+                st.info("Karşılaştırmalı analiz için en az 2 hat gereklidir.")
             except Exception as exc:
                 st.error("Analiz hatasi: " + str(exc))
                 st.code(traceback.format_exc())
