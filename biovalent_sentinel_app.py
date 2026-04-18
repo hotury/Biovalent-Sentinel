@@ -78,7 +78,19 @@ st.set_page_config(
         "About"       : "Biovalent Sentinel v4.0 - Genetic Intelligence at Scale",
     },
 )
-
+def yerel_3d_koordinat_olustur(aa_dizisi):
+    """API olmadan proteinin hidrofobiklik ve açılarına göre koordinat üretir."""
+    n = len(aa_dizisi)
+    # Fiziksel parametreler (basit sarmal yapı)
+    t = np.linspace(0, n/5, n)
+    # Hidrofobiklik haritası (Gerçek amino asit özelliklerine göre itme/çekme)
+    h_map = [1.5 if a in "LIVFMCW" else 0.8 for a in aa_dizisi]
+    
+    x = np.cumsum(np.cos(t) * h_map)
+    y = np.cumsum(np.sin(t) * h_map)
+    z = np.linspace(0, n * 0.2, n)
+    
+    return pd.DataFrame({'x': x, 'y': y, 'z': z, 'aa': list(aa_dizisi)})
 # -----------------------------------------------------------------------------
 # §2  RENK PALETi & CSS
 # -----------------------------------------------------------------------------
