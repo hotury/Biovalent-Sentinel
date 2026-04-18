@@ -1382,7 +1382,7 @@ def pdf_uret(
     tablo_df   : Optional[pd.DataFrame] = None,
     firma_adi  : str = "Biovalent Sentinel",
 ) -> Optional[bytes]:
- # Fonksiyonun içindeki açıklama veya yardım metni bölümü
+# Fonksiyonun içindeki dokümantasyon veya yardım metni
     yardim_metni = """
     Markdown'daki ## başlıklar, ** kalın metin ve - liste öğeleri işlenir.
     Rapor oluşturulurken bu formatlama kurallarına dikkat edilmelidir.
