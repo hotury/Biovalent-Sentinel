@@ -1344,9 +1344,11 @@ def islahci_raporu_uret(
 Bu çeşit **{pazar_cat}** kategorisindedir. {pazar_acl}
 
 ## 🍅 Meyve Profili
-- **Renk:** {renk} | **Brix:** {brix}° | **Hasat:** {hasat} gün
-- **Verim:** {verim} t/ha
-- **Raf Ömrü:** {raf} gün {'— ihracat için uygun ✅' if raf >= 18 else '— yerel tüketim için uygundur'}
+# Eğer bir değişken içinde tutuyorsan (Başına f koymayı ve tırnakları unutma):
+rapor_satiri = f"- **Renk:** {renk} | **Brix:** {brix} Derece | **Hasat:** {hasat} gün"
+
+# Veya direkt ekrana yazdırıyorsan:
+st.write(f"- **Renk:** {renk} | **Brix:** {brix} Derece | **Hasat:** {hasat} gün")
 
 ## 🛡️ Hastalık Durumu
 - **Dirençli olduğu hastalıklar:** {', '.join(direncli) if direncli else 'Hastalık geni kaydedilmemiş'}
