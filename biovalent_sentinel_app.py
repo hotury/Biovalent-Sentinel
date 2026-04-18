@@ -1367,7 +1367,8 @@ st.write(f"- **Renk:** {renk} | **Brix:** {brix} Derece | **Hasat:** {hasat} gü
  else 'Ticari potansiyele ulaşmak için yukarıdaki eksikliklerin giderilmesi önerilir.'}
 
 ---
-*Biovalent Sentinel v{VER} — Otomatik Islahçı Raporu*
+# 1370. satırı şu şekilde güncelle (Başına st.markdown ve tırnak ekleyerek):
+st.markdown(f"*Biovalent Sentinel v{VER} - Otomatik Islahçı Raporu*")
 """
     return rapor
 
