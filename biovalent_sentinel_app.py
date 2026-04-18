@@ -1512,7 +1512,7 @@ def sidebar_yukle() -> pd.DataFrame:
                 df = None
         if df is None:
             df = demo_df()
-            st.info("Demo veri seti aktif (" + str(len(demo_df())) + " hat).", icon="info")
+            st.info("Demo veri seti aktif (" + str(len(demo_df())) + " hat).", icon="ℹ️")
 
         st.markdown("---")
         st.markdown("**Envanter**")
