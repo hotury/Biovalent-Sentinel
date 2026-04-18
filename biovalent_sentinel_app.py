@@ -1608,54 +1608,55 @@ def sekme_proteomik(df: pd.DataFrame) -> None:
             if not dna_in or len(dna_in.strip()) < 30:
                 st.error("En az 30 nukleotid girin.", icon="x")
                 return
-            try:
-                with st.spinner("DNA ceviriliyor, motif taramasi yapiliyor..."):
-                    aa  = dna_cevir(dna_in)
-                if not aa or len(aa) < 12:
-                    st.error("Ceviri cok kisa (" + str(len(aa if aa else '')) + " AA).", icon="❌")
-                    return
-                bio = biyofizik(aa)
-with tab_3d:
+            # --- DİKKAT: 1610. Satır Civarı ---
+        with tab_3d:
             st.subheader("3D Protein Yapısı - Yerel Fizik Motoru")
             
-            if st.button("🧬 3D Yapıyı Simüle Et", use_container_width=True):
+            # Burada eğer yukarıda kalmış bir 'try:' satırı varsa onu sil!
+            
+            if st.button("🧬 3D Yapıyı Simüle Et", use_container_width=True, key="local_3d_btn"):
                 if aa:
-                    with st.spinner("Protein katlanma geometrisi hesaplanıyor..."):
-                        # Fiziksel koordinatları hesapla
-                        df_coords = yerel_3d_koordinat_olustur(aa)
-                        
-                        # Plotly ile Çizim (Hata payı sıfır, internet gerekmez)
-                        fig_3d = go.Figure(data=[go.Scatter3d(
-                            x=df_coords['x'],
-                            y=df_coords['y'],
-                            z=df_coords['z'],
-                            mode='lines+markers',
-                            line=dict(color='emerald', width=6),
-                            marker=dict(
-                                size=4,
-                                color=df_coords['z'],
-                                colorscale='Viridis',
-                                opacity=0.8
-                            ),
-                            text=df_coords['aa'],
-                            hoverinfo='text'
-                        )])
-                        
-                        fig_3d.update_layout(
-                            margin=dict(l=0, r=0, b=0, t=0),
-                            scene=dict(
-                                xaxis_title='X (Å)',
-                                yaxis_title='Y (Å)',
-                                zaxis_title='Z (Å)',
-                                bgcolor="black"
-                            ),
-                            template="plotly_dark"
-                        )
-                        
-                        st.plotly_chart(fig_3d, use_container_width=True)
-                        st.success("✅ Yerel motor ile 3D yapı başarıyla oluşturuldu. (İnternet bağımsız)")
+                    try: # Yeni ve temiz bir try bloğu açıyoruz
+                        with st.spinner("Protein katlanma geometrisi hesaplanıyor..."):
+                            # Fiziksel koordinatları hesapla (82. satıra eklediğimiz fonksiyon)
+                            df_coords = yerel_3d_koordinat_olustur(aa)
+                            
+                            # Plotly ile Çizim
+                            fig_3d = go.Figure(data=[go.Scatter3d(
+                                x=df_coords['x'],
+                                y=df_coords['y'],
+                                z=df_coords['z'],
+                                mode='lines+markers',
+                                line=dict(color='#10b981', width=6),
+                                marker=dict(
+                                    size=5,
+                                    color=df_coords['z'],
+                                    colorscale='Viridis',
+                                    opacity=0.9
+                                ),
+                                text=df_coords['aa'],
+                                hoverinfo='text'
+                            )])
+                            
+                            fig_3d.update_layout(
+                                height=600,
+                                margin=dict(l=0, r=0, b=0, t=0),
+                                scene=dict(
+                                    xaxis=dict(title='X (Å)', gridcolor='gray'),
+                                    yaxis=dict(title='Y (Å)', gridcolor='gray'),
+                                    zaxis=dict(title='Z (Å)', gridcolor='gray'),
+                                    bgcolor="black"
+                                ),
+                                template="plotly_dark"
+                            )
+                            
+                            st.plotly_chart(fig_3d, use_container_width=True)
+                            st.success("✅ Yerel motor ile 3D yapı başarıyla oluşturuldu.")
+                    
+                    except Exception as e:
+                        st.error(f"3D Modelleme sırasında bir hata oluştu: {str(e)}")
                 else:
-                    st.warning("Önce bir DNA dizisi girmeniz gerekiyor.")
+                    st.warning("Analiz edilecek bir amino asit dizisi bulunamadı.")
                 
                 # Protein sinifi
                 clr = PAL["g_hi"] if yorum["ihtimal"]>70 else PAL["amber"] if yorum["ihtimal"]>45 else PAL["red"]
