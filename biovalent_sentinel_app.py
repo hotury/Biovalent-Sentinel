@@ -1382,11 +1382,9 @@ def pdf_uret(
     tablo_df   : Optional[pd.DataFrame] = None,
     firma_adi  : str = "Biovalent Sentinel",
 ) -> Optional[bytes]:
-    """
-    ReportLab ile profesyonel PDF raporu üretir.
+   """
     Markdown'daki ## başlıklar, ** kalın metin ve - liste öğeleri işlenir.
-    Tablo varsa DataFrame'i tablo olarak ekler.
-    Döner: bytes (PDF içeriği) veya None (ReportLab kurulu değilse)
+    Rapor oluşturulurken bu formatlama kurallarına dikkat edilmelidir.
     """
     if not _PDF_OK:
         return None
