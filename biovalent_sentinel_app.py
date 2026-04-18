@@ -1180,7 +1180,6 @@ def nesil_kaybi_tahmini(
 
     return pd.DataFrame(rows)
 
-
 def pazar_uygunluk_skoru(
     verim         : float,
     raf_gun       : int,
@@ -1192,11 +1191,14 @@ def pazar_uygunluk_skoru(
     """
     # Ticari Değer Hesaplama Formülü:
     # Toplam Puan = Dirençler (30p) + 
-    #              Verim (25p) + 
-    #              Raf ömrü (25p) + 
-    #              Brix/kalite (20p)
+    #               Verim (25p) + 
+    #               Raf ömrü (25p) + 
+    #               Brix/kalite (20p)
     
     # Yukarıdaki satırların başına # koyarak Python'un hata vermesini engelledik.
+    """
+    # ... fonksiyonun geri kalan kodları ...
+
     
     skor = (direnc_puani * 0.30) + (verim_puani * 0.25) + (raf_omru * 0.25) + (brix * 0.20)
     Hedef pazar: 'ihracat' | 'yerel' | 'organik' | 'sanayi'
