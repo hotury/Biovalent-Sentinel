@@ -1603,31 +1603,48 @@ def sekme_proteomik(df: pd.DataFrame) -> None:
                     st.error("Ceviri cok kisa (" + str(len(aa if aa else '')) + " AA).", icon="❌")
                     return
                 bio = biyofizik(aa)
-
-                if interpro_akif:
-                    with st.spinner("InterPro/Pfam API sorgulanıyor (~15-40 sn)..."):
-                        motif_sonuc = tam_motif_analizi(aa, fuzzy_esik=fuzzy_esik, interpro_aktif=True)
+with tab_3d:
+            st.subheader("3D Protein Yapısı - Yerel Fizik Motoru")
+            
+            if st.button("🧬 3D Yapıyı Simüle Et", use_container_width=True):
+                if aa:
+                    with st.spinner("Protein katlanma geometrisi hesaplanıyor..."):
+                        # Fiziksel koordinatları hesapla
+                        df_coords = yerel_3d_koordinat_olustur(aa)
+                        
+                        # Plotly ile Çizim (Hata payı sıfır, internet gerekmez)
+                        fig_3d = go.Figure(data=[go.Scatter3d(
+                            x=df_coords['x'],
+                            y=df_coords['y'],
+                            z=df_coords['z'],
+                            mode='lines+markers',
+                            line=dict(color='emerald', width=6),
+                            marker=dict(
+                                size=4,
+                                color=df_coords['z'],
+                                colorscale='Viridis',
+                                opacity=0.8
+                            ),
+                            text=df_coords['aa'],
+                            hoverinfo='text'
+                        )])
+                        
+                        fig_3d.update_layout(
+                            margin=dict(l=0, r=0, b=0, t=0),
+                            scene=dict(
+                                xaxis_title='X (Å)',
+                                yaxis_title='Y (Å)',
+                                zaxis_title='Z (Å)',
+                                bgcolor="black"
+                            ),
+                            template="plotly_dark"
+                        )
+                        
+                        st.plotly_chart(fig_3d, use_container_width=True)
+                        st.success("✅ Yerel motor ile 3D yapı başarıyla oluşturuldu. (İnternet bağımsız)")
                 else:
-                    motif_sonuc = tam_motif_analizi(aa, fuzzy_esik=fuzzy_esik, interpro_aktif=False)
-
-                yorum = akilli_yorum(motif_sonuc, bio)
-
-                # KPI satiri
-                k1, k2, k3, k4 = st.columns(4)
-                k1.metric("DNA bp",      len(dna_temizle(dna_in)))
-                k2.metric("AA Uzunluk",  str(bio["uzunluk"]) + " aa")
-                k3.metric("pI",          bio["pi"])
-                k4.metric("MW",          str(bio["mw_kDa"]) + " kDa")
-                b1, b2, b3, b4 = st.columns(4)
-                b1.metric("Hidrofobiklik",  "%" + str(bio["hid_pct"]))
-                b2.metric("Losin (L)",      "%" + str(bio["leu_pct"]))
-                b3.metric("Yerel Motif",    len(motif_sonuc.get("yerel",[])))
-                b4.metric("Fuzzy Motif",    len(motif_sonuc.get("fuzzy",[])))
-                if interpro_akif:
-                    st.metric("API Sonuc", len(motif_sonuc.get("api",[])))
-
-                st.markdown("---")
-
+                    st.warning("Önce bir DNA dizisi girmeniz gerekiyor.")
+                
                 # Protein sinifi
                 clr = PAL["g_hi"] if yorum["ihtimal"]>70 else PAL["amber"] if yorum["ihtimal"]>45 else PAL["red"]
                 mod_txt = "Heuristic" if yorum["mod"]=="heuristic" else "Motif"
