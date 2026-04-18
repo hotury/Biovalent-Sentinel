@@ -1600,7 +1600,7 @@ def sekme_proteomik(df: pd.DataFrame) -> None:
                 with st.spinner("DNA ceviriliyor, motif taramasi yapiliyor..."):
                     aa  = dna_cevir(dna_in)
                 if not aa or len(aa) < 12:
-                    st.error("Ceviri cok kisa (" + str(len(aa if aa else '')) + " AA).", icon="x")
+                    st.error("Ceviri cok kisa (" + str(len(aa if aa else '')) + " AA).", icon="❌")
                     return
                 bio = biyofizik(aa)
 
