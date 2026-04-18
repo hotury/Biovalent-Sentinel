@@ -1608,54 +1608,61 @@ def sekme_proteomik(df: pd.DataFrame) -> None:
             if not dna_in or len(dna_in.strip()) < 30:
                 st.error("En az 30 nukleotid girin.", icon="x")
                 return
-            # --- DİKKAT: 1610. Satır Civarı ---
+       # --- 3D & ANALİZ PANELLERİ ---
         with tab_3d:
             st.subheader("3D Protein Yapısı - Yerel Fizik Motoru")
             
-            # Burada eğer yukarıda kalmış bir 'try:' satırı varsa onu sil!
-            
-            if st.button("🧬 3D Yapıyı Simüle Et", use_container_width=True, key="
-                         # --- §16.4  3D & ANALİZ PANELLERİ ---
-        with tab_3d:
-            st.subheader("3D Protein Yapısı - Yerel Fizik Motoru")
-            st.info("Bu model, proteinin hidrofobik bölgelerine ve sarmal yapısına göre yerel olarak simüle edilir.")
-            
-            if st.button("🧬 3D Yapıyı Simüle Et", use_container_width=True, key="local_3d_engine"):
+            # Hata veren 1617. satırın düzeltilmiş hali burada:
+            if st.button("🧬 3D Yapıyı Simüle Et", use_container_width=True, key="local_3d_sim_key"):
                 if aa:
                     try:
-                        with st.spinner("Katlanma geometrisi hesaplanıyor..."):
-                            # 82. satıra eklediğimiz yerel motoru çağırıyoruz
+                        with st.spinner("Protein katlanma geometrisi hesaplanıyor..."):
+                            # Koordinatları hesapla (82. satırdaki fonksiyon)
                             df_coords = yerel_3d_koordinat_olustur(aa)
                             
+                            # Plotly ile Çizim
                             fig_3d = go.Figure(data=[go.Scatter3d(
-                                x=df_coords['x'], y=df_coords['y'], z=df_coords['z'],
+                                x=df_coords['x'],
+                                y=df_coords['y'],
+                                z=df_coords['z'],
                                 mode='lines+markers',
                                 line=dict(color='#10b981', width=6),
-                                marker=dict(size=4, color=df_coords['z'], colorscale='Viridis', opacity=0.8),
-                                text=df_coords['aa'], hoverinfo='text'
+                                marker=dict(
+                                    size=5,
+                                    color=df_coords['z'],
+                                    colorscale='Viridis',
+                                    opacity=0.9
+                                ),
+                                text=df_coords['aa'],
+                                hoverinfo='text'
                             )])
                             
                             fig_3d.update_layout(
-                                height=600, margin=dict(l=0, r=0, b=0, t=0),
-                                scene=dict(xaxis_title='X', yaxis_title='Y', zaxis_title='Z', bgcolor="black"),
+                                height=600,
+                                margin=dict(l=0, r=0, b=0, t=0),
+                                scene=dict(
+                                    xaxis=dict(title='X (Å)', gridcolor='gray'),
+                                    yaxis=dict(title='Y (Å)', gridcolor='gray'),
+                                    zaxis=dict(title='Z (Å)', gridcolor='gray'),
+                                    bgcolor="black"
+                                ),
                                 template="plotly_dark"
                             )
+                            
                             st.plotly_chart(fig_3d, use_container_width=True)
-                            st.success("✅ Yerel motor ile 3D model başarıyla oluşturuldu.")
+                            st.success("✅ Yerel motor ile 3D yapı başarıyla oluşturuldu.")
                     except Exception as e:
-                        st.error(f"Simülasyon hatası: {str(e)}")
+                        st.error(f"3D Modelleme sırasında bir hata oluştu: {str(e)}")
                 else:
-                    st.warning("Analiz edilecek amino asit dizisi bulunamadı.")
+                    st.warning("Analiz edilecek bir amino asit dizisi bulunamadı.")
 
         with tab_analiz:
             st.subheader("Gelişmiş Hat Analizi")
-            # Burada mevcut analiz kodların varsa devam edebilir...
             if 'df' in locals() and len(df) > 1:
                 st.write("### Genetik Benzerlik Isı Haritası (Jaccard)")
                 if len(df) <= 30:
                     try:
                         ids = df["hat_id"].tolist()
-                        # Jaccard benzerlik matrisi hesaplama
                         mat_data = [
                             [jaccard(ozellik_seti(df.iloc[i]), ozellik_seti(df.iloc[j])) 
                              for j in range(len(df))] 
@@ -1664,14 +1671,11 @@ def sekme_proteomik(df: pd.DataFrame) -> None:
                         mat = pd.DataFrame(mat_data, index=ids, columns=ids)
                         st.plotly_chart(fig_heatmap(mat), use_container_width=True)
                     except Exception as exc:
-                        st.error("Isı haritası oluşturulurken bir hata oluştu: " + str(exc))
+                        st.error(f"Isı haritası oluşturulurken bir hata oluştu: {exc}")
                 else:
                     st.info("Isı haritası performansı korumak için en fazla 30 hat ile çalışır.")
             else:
                 st.info("Karşılaştırmalı analiz için en az 2 hat gereklidir.")
-            except Exception as exc:
-                st.error("Analiz hatasi: " + str(exc))
-                st.code(traceback.format_exc())
 
 # -----------------------------------------------------------------------------
 # §14  SEKME 2 - BULK UPLOAD
